@@ -91,6 +91,9 @@ pm('add', 'Myrr', 'BarFiller')
 assert(contents('tmp_pm/data/profiles/myrr.txt') == 'barfiller\n', 'character list not saved')
 
 pm('apply')
+local count_before_all = count_command('lua load equipviewer')
+pm('load', 'all')
+assert(count_command('lua load equipviewer') == count_before_all + 1, 'load all did not apply global profile')
 assert(count_command('lua load equipviewer') >= 1, 'global addon not loaded')
 assert(count_command('lua load barfiller') >= 1, 'character addon not loaded')
 
