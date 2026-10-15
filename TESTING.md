@@ -1,7 +1,7 @@
 # TESTING — AddonManager
 
 **Development branch:** dev/addonmanager-v0.4
-**Version:** 0.4.0-dev.1
+**Version:** 0.4.0-dev.2
 **Date:** 2026-10-14
 **Status:** v0.3 live capture confirmed by user; v0.4 rename, global exclusion and pruning await in-game validation.
 
@@ -11,7 +11,7 @@
 
 - [ ] `lua load AddonManager` succeeds. `//am` and `//am help` show formatted commands; invalid `//am` shows help.
 - [ ] `//am status` shows current client character, version and counts.
-- [ ] `//am overlays` preserves the historical BarFiller/EquipViewer toggle.
+- [ ] The old BarFiller/EquipViewer overlay toggle has been removed; there is no `//am overlays` command.
 - [ ] `//am list global` and `//am list Cioara` preserve copied v0.3 profile files.
 - [ ] With global containing an addon, `//am import loaded Cioara` excludes it; preview also excludes entries already in Cioara.
 - [ ] `//am import loaded global` captures full loaded snapshot minus global's already saved entries; there is no global subtraction of itself beyond deduplication.
