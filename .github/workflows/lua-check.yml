@@ -15,17 +15,17 @@ jobs:
       - name: Install Lua 5.1
         run: sudo apt-get update && sudo apt-get install -y lua5.1
       - name: Static syntax check
-        run: luac5.1 -p AddonToggle.lua && luac5.1 -p tests/smoke.lua
+        run: luac5.1 -p AddonManager.lua && luac5.1 -p tests/smoke.lua
       - name: Mock Windower smoke test
         run: lua5.1 tests/smoke.lua
       - name: Assemble installable testing ZIP
         run: |
-          mkdir -p package/AddonToggle
-          cp AddonToggle.lua README.md package/AddonToggle/
+          mkdir -p package/AddonManager
+          cp AddonManager.lua README.md package/AddonManager/
           cp WORKFLOW.md TESTING.md package/
-          (cd package && zip -r ../AddonToggle-testing-batch.zip .)
+          (cd package && zip -r ../AddonManager-testing-batch.zip .)
       - name: Upload testing package
         uses: actions/upload-artifact@v4
         with:
-          name: AddonToggle-testing-batch
-          path: AddonToggle-testing-batch.zip
+          name: AddonManager-testing-batch
+          path: AddonManager-testing-batch.zip
