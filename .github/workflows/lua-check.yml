@@ -18,3 +18,14 @@ jobs:
         run: luac5.1 -p AddonToggle.lua && luac5.1 -p tests/smoke.lua
       - name: Mock Windower smoke test
         run: lua5.1 tests/smoke.lua
+      - name: Assemble installable testing ZIP
+        run: |
+          mkdir -p package/AddonToggle
+          cp AddonToggle.lua README.md package/AddonToggle/
+          cp WORKFLOW.md TESTING.md package/
+          (cd package && zip -r ../AddonToggle-testing-batch.zip .)
+      - name: Upload testing package
+        uses: actions/upload-artifact@v4
+        with:
+          name: AddonToggle-testing-batch
+          path: AddonToggle-testing-batch.zip
