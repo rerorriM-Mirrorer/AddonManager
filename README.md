@@ -1,7 +1,7 @@
 # AddonManager
 
 **Author:** Max and A
-**Development version:** 0.4.0-dev.1
+**Development version:** 0.4.0-dev.2
 **Windower:** FFXI / Windower 4 (Lua 5.1)
 **Commands:** //am
 
@@ -13,7 +13,7 @@ Manage **Lua addons** with persistent global and per-character lists. Inspired b
 2. Create Windower/addons/AddonManager/ and place AddonManager.lua and README.md there. Copy the **existing AddonToggle/data/** folder into **AddonManager/data/** to retain every profile and option.
 3. Disable the original AddonToggle and Windower plugin_manager in startup configuration; do not run two profile managers simultaneously. Keep the old AddonToggle folder as an offline backup.
 4. Load from the console with `lua load AddonManager` or enable the new folder through the Windower launcher. Type `//am help`.
-5. Replace references to old `//pm` and `//at` commands in macros and scripts; **neither alias is registered**. If you still want the original two-overlay toggle, use `//am overlays`.
+5. Replace references to old `//pm` and `//at` commands in macros and scripts; **neither alias is registered**. The BarFiller/EquipViewer pair-toggle has been retired.
 6. **v0.4 is a development build not yet tested live.** The preceding v0.3 live snapshot capture was successfully tested in game on 2026-10-14. Preserve your original init.txt loading until you verify startup behavior on each client.
 
 AddonManager itself should be started through Windower, so that it receives actual character login events. Other addon startup arrangements may remain independent.
@@ -44,7 +44,6 @@ AddonManager itself should be started through Windower, so that it receives actu
 | //am status | Show character, counts, and request totals |
 | //am restart | Reload AddonManager itself |
 | //am unload manager | Explicitly unload AddonManager itself |
-| //am overlays | Toggle the historical BarFiller/EquipViewer overlays |
 
 Example: //am add global ConsoleBGPlus and //am add Cioara EnemyBar2. Then //am load Cioara from **Myrr's** client issues load requests for the entries in Cioara's saved list, without changing Myrr's profile or loading Cioara's global additions. //am apply specifically loads global + the current character.
 
@@ -78,7 +77,6 @@ Run //am import file Cioara to read plain addon names (one per line, optional # 
 - Status tracks **requested** loads and unloads, never claims confirmed runtime state. Use the Windower //lua list command to verify.
 - Installed-addon scan checks for a folder containing a same-named Lua entrypoint and does not reveal the runtime list.
 - Concurrent writes by multiple clients to the **same profile file** are not transactionally protected yet. Edit from one client at a time.
-- The preserved `//am overlays` toggle still uses a simple boolean (no runtime verification).
 - No priority cycle or character-specific exclusions yet.
 
 ## Changelog
@@ -88,6 +86,7 @@ Run //am import file Cioara to read plain addon names (one per line, optional # 
 - **2026-10-14 / Batch 2 experimental:** Addon directory scan; safe preview/confirmation imports from init.txt, legacy XML, and plain text.
 - **2026-10-14 / Batch 3 experimental (v0.3):** Capture Windower's loaded-addon list through incoming-text events; reconcile spaced display names against installed addon folders and preview safe merge-only profile import. **Live capture subsequently confirmed by user.**
 - **2026-10-14 / Batch 4 experimental (v0.4):** Rename installable addon to AddonManager with //am only; exclude global entries from character loaded imports; preview-confirm character pruning for existing global duplicates.
+- **2026-10-14 / Batch 4 refinement (v0.4.0-dev.2):** Remove the now-unneeded historical BarFiller/EquipViewer toggle and its command entirely.
 
 ## Attribution
 
