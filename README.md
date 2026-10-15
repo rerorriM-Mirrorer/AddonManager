@@ -28,6 +28,7 @@ AddonToggle itself should be started through Windower, so that it receives actua
 | //pm remove [global/character] ADDON | Delete entry; running state unchanged |
 | //pm load [global/character] | Issue loads from the selected list on this client |
 | //pm unload [global/character] | Issue unloads from the selected list on this client |
+| //pm load all | Load the combined global and current-character lists (same as //pm apply) |
 | //pm unload all | Unload the combined global and current-character lists |
 | //pm apply | Load global + current character (deduplicated) |
 | //pm scan [all] | List installed Lua addons (not currently running addons) |
