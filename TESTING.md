@@ -14,6 +14,7 @@ Back up the existing addon folder and startup scripts. Disable Windower's origin
 User feedback: on 2026-10-14 the user reported that profile management was working well and that the //pm scan catalog could help with imports. The uploaded global profile contained equipviewer, while Cioara's profile contained barfiller. The captured Cioara chat log showed one //lua list snapshot with 54 loaded addon display names, and //pm scan all reported 69 installed folder entries. All 54 names in that snapshot matched the installed folder catalog after ignoring capitalization and spaces, including Battle Stations and Job Change. This is not evidence that a live incoming-text capture through the new addon works.
 
 - [ ] Before installing v0.3, back up your existing AddonToggle folder and data/profiles directory.
+- [ ] //pm load all requests global + active-character addons (same as //pm apply). Prior Cioara live log revealed "all: no addons to load" on the previous version; this corrects that.
 - [ ] //pm import loaded Cioara requests //lua list in **this** Windower client.
 - [ ] Loaded output is captured after ~2 seconds; the preview shows an appropriate number of entries and any missing/ambiguous names.
 - [ ] The preview correctly resolves display names with spaces (Battle Stations, Job Change) to real folder names.
