@@ -4,7 +4,7 @@
 -- No code copied from the original plugin_manager; see README for historical inspiration.
 _addon.name = 'AddonManager'
 _addon.author = 'Max and A'
-_addon.version = '0.4.0-dev.1'
+_addon.version = '0.4.0-dev.2'
 _addon.commands = {'am'}
 
 require('chat')
@@ -17,7 +17,6 @@ local generation = 0
 local pending_import = nil
 local pending_prune = nil -- Previewed duplicate cleanup; never writes without confirmation.
 local running_capture = nil -- Only the current client's most recent live lua-list request.
-local hidden = false -- Preserves the historical //at toggle independently of saved profiles.
 local startup_enabled = true
 local delay_seconds = 1
 local current_character = nil
@@ -271,7 +270,6 @@ local function print_help()
         {'//am status', 'Current character, profiles, queue info'},
         {'//am restart', 'Reload the profile manager'},
         {'//am unload manager', 'Unload the profile manager itself'},
-        {'//am overlays', 'Legacy BarFiller/EquipViewer toggle'},
     }
     for _, line in ipairs(lines) do
         windower.add_to_chat(0, ('  //am'):color(200) ..
@@ -555,15 +553,7 @@ end
 local function dispatch(...)
     local args = {...}
     local verb = (args[1] or ''):lower()
-    if verb == 'overlays' then
-        if not hidden then
-            windower.send_command('lua unload barfiller; wait 0.2; lua unload equipviewer')
-        else
-            windower.send_command('lua load barfiller; wait 0.2; lua load equipviewer')
-        end
-        hidden = not hidden
-        msg('Legacy overlays ' .. (hidden and 'hidden' or 'restored'))
-    elseif verb == 'help' or verb == '' then
+    if verb == 'help' or verb == '' then
         print_help()
     elseif verb == 'list' then
         display_list(target_profile(args[2]))
