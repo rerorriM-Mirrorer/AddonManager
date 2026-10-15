@@ -2,6 +2,7 @@
 _addon = {}
 local events, commands, chats = {}, {}, {}
 local who = 'Myrr'
+local simulate_list = true
 
 package.preload['chat'] = function()
     string.color = function(self) return self end
@@ -9,14 +10,30 @@ package.preload['chat'] = function()
 end
 
 local addon_names = {
-    'AddonToggle', 'BarFiller', 'EquipViewer', 'ConsoleBGPlus', 'EnemyBar2'
+    'AddonToggle', 'BarFiller', 'EquipViewer', 'ConsoleBGPlus', 'EnemyBar2',
+    'BattleStations', 'JobChange'
 }
 
 windower = {
     addon_path = './tmp_pm/',
     windower_path = './tmp_windower/',
     add_to_chat = function(_, text) chats[#chats + 1] = text end,
-    send_command = function(command) commands[#commands + 1] = command end,
+    send_command = function(command)
+        commands[#commands + 1] = command
+        if command == 'lua list' and simulate_list then
+            local lines = {
+                'Currently loaded addons:',
+                '  Equipviewer',
+                '  Battle Stations',
+                '  Job Change',
+                '  plugin_manager',
+                '  Missing Fake Addon',
+            }
+            for _, line in ipairs(lines) do
+                events['incoming text']('', line, 0, 0, false)
+            end
+        end
+    end,
     register_event = function(event, cb) events[event] = cb end,
     get_dir = function() return addon_names end,
     dir_exists = function() return true end,
@@ -102,6 +119,24 @@ pm('import', 'legacy', 'Cioara')
 pm('import', 'confirm')
 assert(contents('tmp_pm/data/profiles/cioara.txt'):find('equipviewer', 1, true),
     'legacy XML import not saved')
+
+-- Loaded-addon list is obtained from the SAME incoming-text event used
+-- by Windower's Logger addon, and mapped to actual folder names.
+pm('import', 'loaded', 'Cioara')
+local before_live = contents('tmp_pm/data/profiles/cioara.txt')
+assert(not before_live:find('battlestations', 1, true),
+    'loaded snapshot was imported before confirmation')
+pm('import', 'confirm')
+local live = contents('tmp_pm/data/profiles/cioara.txt')
+assert(live:find('battlestations', 1, true), 'spaced display name not resolved')
+assert(live:find('jobchange', 1, true), 'second spaced display name not resolved')
+assert(not live:find('plugin_manager', 1, true), 'manager imported unsafely')
+assert(not live:find('missing', 1, true), 'unknown addon imported unsafely')
+simulate_list = false
+pm('import', 'loaded', 'Myrr')
+pm('import', 'confirm')
+assert(contents('tmp_pm/data/profiles/myrr.txt') == '',
+    'missing live output changed profile')
 
 pm('legacy-toggle')
 assert(count_command('lua unload barfiller; wait 0.2; lua unload equipviewer') >= 1,
