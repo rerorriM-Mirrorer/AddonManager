@@ -38,6 +38,8 @@ AddonToggle itself should be started through Windower, so that it receives actua
 | //pm delay [seconds] | Set spacing between load requests (0–10, default 1) |
 | //pm startup on/off | Enable or disable auto-loading on character login |
 | //pm status | Show character, counts, and request totals |
+| //pm restart | Reload AddonToggle itself |
+| //pm unload manager | Explicitly unload AddonToggle itself |
 | //at | Preserve historical BarFiller/EquipViewer toggle |
 
 Example: //pm add global ConsoleBGPlus and //pm add Cioara EnemyBar2. Then //pm load Cioara from **Myrr's** client issues load requests for the entries in Cioara's saved list, without changing Myrr's profile or loading Cioara's global additions. //pm apply specifically loads global + the current character.
