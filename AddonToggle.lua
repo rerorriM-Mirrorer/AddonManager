@@ -184,6 +184,8 @@ local function command_items(kind, list, label, start_after)
     if #list == 0 then msg(label .. ': no addons to ' .. kind); return end
     msg(('%s: queued %d %s request(s), %.1fs spacing'):format(
         label, #list, kind, delay_seconds))
+    -- Scan only once per batch to avoid expensive repeated directory reads.
+    local installed, scanned = installed_lookup()
     coroutine.schedule(function()
         if start_after and start_after > 0 then coroutine.sleep(start_after) end
         for i, addon in ipairs(list) do
@@ -192,8 +194,7 @@ local function command_items(kind, list, label, start_after)
                 return
             end
             if kind == 'load' then
-                local found, scanned = is_installed(addon)
-                if scanned and not found then
+                if scanned and not installed[addon] then
                     msg('Skipping missing addon: ' .. addon, 123)
                 else
                     windower.send_command('lua load ' .. addon)
