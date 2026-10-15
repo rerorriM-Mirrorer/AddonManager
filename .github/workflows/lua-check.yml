@@ -1,0 +1,20 @@
+name: Lua 5.1 checks
+on:
+  push:
+    branches:
+      - 'dev/**'
+  pull_request:
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Lua 5.1
+        run: sudo apt-get update && sudo apt-get install -y lua5.1
+      - name: Static syntax check
+        run: luac5.1 -p AddonToggle.lua && luac5.1 -p tests/smoke.lua
+      - name: Mock Windower smoke test
+        run: lua5.1 tests/smoke.lua
