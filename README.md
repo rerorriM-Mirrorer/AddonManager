@@ -1,7 +1,7 @@
 # AddonToggle / Profile Manager
 
 **Author:** Max and A
-**Development version:** 0.2.0-dev.1
+**Development version:** 0.3.0-dev.1
 **Windower:** FFXI / Windower 4 (Lua 5.1)
 **Commands:** //pm, //at
 
@@ -31,6 +31,7 @@ AddonToggle itself should be started through Windower, so that it receives actua
 | //pm unload all | Unload the combined global and current-character lists |
 | //pm apply | Load global + current character (deduplicated) |
 | //pm scan [all] | List installed Lua addons (not currently running addons) |
+| //pm import loaded [profile] | Capture this client's //lua list and preview new entries | 
 | //pm import init [profile] | Preview import of scripts/init.txt |
 | //pm import legacy [profile] | Preview original plugin_manager XML profile |
 | //pm import file [profile] | Preview data/import.txt |
@@ -47,6 +48,11 @@ Example: //pm add global ConsoleBGPlus and //pm add Cioara EnemyBar2. Then //pm 
 Every add/remove immediately saves a plain text file, e.g. data/profiles/global.txt or data/profiles/cioara.txt. Editing is independent of loading. Duplicate entries are suppressed. Saved startup options are kept in data/options.txt.
 
 ## Experimental imports
+
+**Live loaded-addon import (v0.3 test):** Run //pm import loaded Cioara (or //pm import loaded global) from the client whose running addons you want to copy. AddonToggle invokes Windower's lua list and attempts to observe its chat output through the incoming-text event that Windower Logger uses. After a short capture window, the manager previews addon names normalized to actual installed folders. It skips plugin_manager and AddonToggle, deduplicates already-listed entries, and flags unmatched display names. Run //pm import confirm to **merge** additions into the saved profile, or //pm import cancel to discard the preview. The command never immediately loads/unloads the captured addons.
+
+The feature is **experimental**: if this Windower installation does not expose the lua list output to incoming-text listeners, no preview will be created. This is a snapshot of one client, not continuous runtime tracking. //pm scan scans installed folders instead; those are *not* evidence of current runtime state.
+
 
 All imports are **preview-first**. Run //pm import init global to inspect recognized Lua load commands from Windower/scripts/init.txt; finish with //pm import confirm or //pm import cancel.
 
@@ -72,6 +78,7 @@ Run //pm import file Cioara to read plain addon names (one per line, optional # 
 - **Original v1.0:** Max's //at toggle for BarFiller and EquipViewer.
 - **2026-10-14 / 0.2.0-dev.1 / Batch 1:** Saved profiles; global and character login loading; stagger interval; list editing; explicit load/unload; preserved //at alias.
 - **2026-10-14 / Batch 2 experimental:** Addon directory scan; safe preview/confirmation imports from init.txt, legacy XML, and plain text.
+- **2026-10-14 / Batch 3 experimental (v0.3):** Capture Windower's loaded-addon list through incoming-text events; reconcile spaced display names against installed addon folders and preview safe merge-only profile import.
 
 ## Attribution
 
