@@ -1,13 +1,34 @@
 # TESTING — AddonToggle / Profile Manager
 
 **Development branch:** dev/profile-manager-v0.2
-**Version:** 0.2.0-dev.1
+**Version:** 0.3.0-dev.1
 **Date:** 2026-10-14
 **Status:** Code committed; no live FFXI testing has been performed.
 
 ## First install
 
 Back up the existing addon folder and startup scripts. Disable Windower's original plugin_manager. Put AddonToggle.lua in Windower/addons/AddonToggle/. Keep current launcher/init.txt addon load settings during the first isolated tests. Test only with a nonessential addon before migrating any core UI tools.
+
+## Batch 3 — Live loaded-addon capture (experimental)
+
+User feedback: on 2026-10-14 the user reported that profile management was working well and that the //pm scan catalog could help with imports. The uploaded global profile contained equipviewer, while Cioara's profile contained barfiller. The captured Cioara chat log showed one //lua list snapshot with 54 loaded addon display names, and //pm scan all reported 69 installed folder entries. All 54 names in that snapshot matched the installed folder catalog after ignoring capitalization and spaces, including Battle Stations and Job Change. This is not evidence that a live incoming-text capture through the new addon works.
+
+- [ ] Before installing v0.3, back up your existing AddonToggle folder and data/profiles directory.
+- [ ] //pm import loaded Cioara requests //lua list in **this** Windower client.
+- [ ] Loaded output is captured after ~2 seconds; the preview shows an appropriate number of entries and any missing/ambiguous names.
+- [ ] The preview correctly resolves display names with spaces (Battle Stations, Job Change) to real folder names.
+- [ ] AddonToggle and plugin_manager themselves are never included in a new profile.
+- [ ] No profile changes before //pm import confirm.
+- [ ] //pm import cancel leaves the saved profile unchanged.
+- [ ] //pm import confirm appends previously absent addon names only; file contents survive addon reload.
+- [ ] //pm import loaded global explicitly targets global list.
+- [ ] If capture fails (no incoming-text event or empty list), manager reports a failure and does not prepare/save an import.
+- [ ] //pm scan all remains a separate installed-folder inventory command.
+- [ ] Existing //at toggle, persistent profiles, manual load/unload, and auto-login staggering still work.
+
+Note: the uploaded console log contains some duplicate-load errors for EquipViewer and BarFiller, which were already running when further load requests were issued. AddonToggle does not yet know confirmed runtime states; this is a later optimization, not a claimed fix in v0.3.
+
+---
 
 ## Batch 1 — Profile and lifecycle checks
 
@@ -52,6 +73,7 @@ There is no automatic unloading of finished addon loads at logout; only queued w
 
 - Original v1.0: Single //at toggle. No supplied original live test report.
 - 2026-10-14 Batch 1: New profiles/startup/list commands; awaiting live testing.
-- 2026-10-14 Batch 2: Installed directory scan and preview/import experiments; awaiting live testing.
+- 2026-10-14 Batch 2: Installed directory scan and preview/import experiments; user reported profile manager works well; specific test boxes not yet individually verified.
+- 2026-10-14 Batch 3: Live-loaded import from //lua list added; capture itself awaiting in-game verification.
 
 Historical test records have not been fabricated. Corrections and later test findings should be appended, preserving the history.
