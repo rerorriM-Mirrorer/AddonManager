@@ -4,7 +4,7 @@
 -- No code copied from the original plugin_manager; see README for historical inspiration.
 _addon.name = 'AddonToggle'
 _addon.author = 'Max and A'
-_addon.version = '0.2.0-dev.1'
+_addon.version = '0.3.0-dev.1'
 _addon.commands = {'pm'}
 
 require('chat')
@@ -15,6 +15,7 @@ local profiles_dir = data_dir .. 'profiles/'
 local addons_dir = windower.windower_path .. 'addons/'
 local generation = 0
 local pending_import = nil
+local running_capture = nil -- Last requested live lua-list capture, scoped to this client.
 local hidden = false -- Preserves the historical //at toggle independently of saved profiles.
 local startup_enabled = true
 local delay_seconds = 1
@@ -138,6 +139,30 @@ local function is_installed(addon)
     return ok and installed[addon] ~= nil, ok
 end
 
+-- Windower's //lua list emits display names, which may contain spaces (for
+-- example "Battle Stations") unlike actual addon folder/command names.
+-- Only resolve against the installed addon directory; never execute an
+-- unverified name taken from chat text.
+local function canonical_key(value)
+    return tostring(value or ''):lower():gsub('[^%w]', '')
+end
+
+local function installed_display_index(installed)
+    local index, collisions = {}, {}
+    for key in pairs(installed) do
+        local compact = canonical_key(key)
+        if collisions[compact] then
+            -- Already marked ambiguous.
+        elseif index[compact] and index[compact] ~= key then
+            index[compact] = nil
+            collisions[compact] = true
+        else
+            index[compact] = key
+        end
+    end
+    return index
+end
+
 local function display_list(profile)
     if not profile then msg('No character detected. Specify a profile.', 123); return end
     local list = read_profile(profile)
@@ -235,6 +260,7 @@ local function print_help()
         {'//pm unload [global|character|all]', 'Unload listed addons only'},
         {'//pm apply', 'Load global + current character'},
         {'//pm scan [all]', 'Discover installed Lua addons'},
+        {'//pm import loaded [profile]', 'Preview what //lua list reports NOW'},
         {'//pm import init [profile]', 'Preview imports from scripts/init.txt'},
         {'//pm import legacy [profile]', 'Preview original plugin_manager XML'},
         {'//pm import file [profile]', 'Preview data/import.txt'},
@@ -302,6 +328,284 @@ local function parse_legacy(s, profile)
     end
     return nil
 end
+
+-- The live loaded-list capture uses Windower's incoming-text stream (the same
+-- event its Logger addon observes), NOT a speculative loaded-addon API.
+-- It is experimental: if the output does not pass through this stream on a
+-- user's build, no import is written and the user receives a clear warning.
+local function capture_line(text)
+    if not running_capture or type(text) ~= 'string' then return end
+    -- Color/control codes can precede the text. Windower chat library already
+    -- supplies strip_colors for the registered incoming-text event strings.
+    text = text:strip_colors()
+    for line in text:gmatch('[^\r\n]+') do
+        if line:find('Currently loaded addons:', 1, true) then
+            running_capture.started = true
+            running_capture.lines = {}
+        elseif running_capture.started then
+            local name = line:match('^  +(.+)
+    if not target then msg('Specify a character or log in first.', 123); return end
+    local candidates
+    if source == 'loaded' then
+        begin_loaded_capture(target)
+        return
+    elseif source == 'init' then
+        local script = read_text(windower.windower_path .. 'scripts/init.txt')
+        if not script then msg('Cannot find Windower/scripts/init.txt', 123); return end
+        candidates = parse_init(script)
+    elseif source == 'legacy' then
+        local xml = read_text(addons_dir .. 'plugin_manager/data/settings.xml')
+        if not xml then msg('Cannot find plugin_manager/data/settings.xml', 123); return end
+        candidates = parse_legacy(xml, target)
+        if not candidates then msg('No matching <' .. target .. '> section in legacy XML', 123); return end
+    elseif source == 'file' then
+        local raw = read_text(data_dir .. 'import.txt')
+        if not raw then msg('Create AddonToggle/data/import.txt first.', 123); return end
+        candidates = parse_lines(raw)
+    else
+        msg('Use //pm import loaded|init|legacy|file [profile]', 123)
+        return
+    end
+    local current = read_profile(target)
+    local additions = {}
+    local lookup, can_scan = installed_lookup()
+    local missing = 0
+    for _, name in ipairs(candidates) do
+        if can_scan and not lookup[name] then
+            missing = missing + 1
+        elseif not has_value(current, name) and not has_value(additions, name)
+            and name ~= 'addontoggle' and name ~= 'plugin_manager' then
+            additions[#additions + 1] = name
+        end
+    end
+    pending_import = {source = source, target = target, names = additions}
+    msg(('Preview %s -> %s: %d new; %d unavailable skipped'):format(
+        source, target, #additions, missing))
+    for _, name in ipairs(additions) do msg('  + ' .. name, 0) end
+    msg('No changes yet. //pm import confirm or //pm import cancel.')
+end
+
+local function import_command(source, target)
+    if source == 'cancel' then pending_import = nil; msg('Import canceled'); return end
+    if source == 'confirm' then
+        if not pending_import then msg('Nothing awaiting confirmation.', 123); return end
+        local p = pending_import
+        local combined = combine(read_profile(p.target), p.names)
+        if write_profile(p.target, combined) then
+            msg(('Imported %d entry/entries into %s; saved.'):format(#p.names, p.target))
+            pending_import = nil
+        end
+        return
+    end
+    preview_import(source, target_profile(target))
+end
+
+local function read_options()
+    local saved = read_text(data_dir .. 'options.txt') or ''
+    for key, value in saved:gmatch('([%w_]+)%s*=%s*([^\r\n]+)') do
+        if key == 'delay' then
+            local n = tonumber(value)
+            if n and n >= 0 and n <= 10 then delay_seconds = n end
+        elseif key == 'startup' then
+            startup_enabled = trim(value) ~= 'off'
+        end
+    end
+end
+
+local function save_options()
+    ensure_dirs()
+    local f, err = io.open(data_dir .. 'options.txt', 'w')
+    if not f then msg('Cannot save options: ' .. tostring(err), 123); return false end
+    f:write('startup=', startup_enabled and 'on' or 'off', '\n')
+    f:write('delay=', tostring(delay_seconds), '\n')
+    f:close()
+    return true
+end
+
+local function dispatch(...)
+    local args = {...}
+    local verb = (args[1] or ''):lower()
+    if verb == 'legacy-toggle' then
+        if not hidden then
+            windower.send_command('lua unload barfiller; wait 0.2; lua unload equipviewer')
+        else
+            windower.send_command('lua load barfiller; wait 0.2; lua load equipviewer')
+        end
+        hidden = not hidden
+        msg('Legacy overlays ' .. (hidden and 'hidden' or 'restored'))
+    elseif verb == 'help' or verb == '' then
+        print_help()
+    elseif verb == 'list' then
+        display_list(target_profile(args[2]))
+    elseif verb == 'add' or verb == 'remove' then
+        local p, addon
+        if args[3] then p, addon = normal(args[2]), normal(args[3])
+        else p, addon = current_profile(), normal(args[2]) end
+        edit_profile(verb, p, addon)
+    elseif verb == 'load' or verb == 'unload' then
+        if verb == 'unload' and (args[2] or ''):lower() == 'manager' then
+            generation = generation + 1
+            windower.send_command('lua unload AddonToggle')
+        elseif verb == 'unload' and (args[2] or ''):lower() == 'all' then
+            local who = current_profile()
+            if not who then msg('Log in to use //pm unload all', 123); return end
+            command_items('unload', combine(read_profile('global'), read_profile(who)),
+                'global + ' .. who)
+        else
+            local p = target_profile(args[2])
+            if not p then msg('Specify a character or log in first.', 123); return end
+            command_items(verb, read_profile(p), p)
+        end
+    elseif verb == 'apply' then
+        apply_current()
+    elseif verb == 'scan' then
+        scan_installed((args[2] or ''):lower() == 'all')
+    elseif verb == 'import' then
+        import_command((args[2] or ''):lower(), args[3])
+    elseif verb == 'delay' then
+        if not args[2] then msg(('Current load spacing: %.1f seconds'):format(delay_seconds)); return end
+        local seconds = tonumber(args[2])
+        if not seconds or seconds < 0 or seconds > 10 then
+            msg('Usage: //pm delay <0..10 seconds>', 123); return
+        end
+        delay_seconds = seconds
+        if save_options() then msg('Load spacing saved: ' .. tostring(delay_seconds) .. 's') end
+    elseif verb == 'startup' then
+        if args[2] ~= 'on' and args[2] ~= 'off' then
+            msg('Startup is ' .. (startup_enabled and 'on' or 'off') ..
+                '. Usage: //pm startup on|off'); return
+        end
+        startup_enabled = args[2] == 'on'
+        if save_options() then msg('Automatic profile loading: ' .. args[2]) end
+    elseif verb == 'status' then
+        local who = current_profile() or '(character not logged in)'
+        msg('v' .. _addon.version .. ' | character: ' .. who ..
+            ' | startup: ' .. (startup_enabled and 'on' or 'off') ..
+            ' | spacing: ' .. tostring(delay_seconds) .. 's')
+        msg('Global: ' .. #read_profile('global') .. ' | character: ' ..
+            (who ~= '(character not logged in)' and
+                #read_profile(who) or 0) ..
+            ' | command requests tracked: ' .. tostring((function()
+                local count = 0
+                for _ in pairs(requested) do count = count + 1 end
+                return count
+            end)()) .. ' (unverified)')
+    elseif verb == 'restart' then
+        generation = generation + 1
+        windower.send_command('lua reload AddonToggle')
+    else
+        msg('Unknown command: ' .. verb, 123)
+        print_help()
+    end
+end
+
+windower.register_event('addon command', dispatch)
+
+windower.register_event('load', function()
+    ensure_dirs()
+    read_options()
+    windower.send_command('alias at lua c AddonToggle legacy-toggle')
+    current_character = player_name()
+    if current_character and startup_enabled then
+        apply_current(3)
+    end
+end)
+
+windower.register_event('login', function(name)
+    current_character = normal(name) or player_name()
+    generation = generation + 1
+    if current_character and startup_enabled then apply_current(3) end
+end)
+
+windower.register_event('logout', function()
+    generation = generation + 1
+    current_character = nil
+    pending_import = nil
+    running_capture = nil
+end)
+
+windower.register_event('unload', function()
+    generation = generation + 1
+    running_capture = nil
+    windower.send_command('unalias at')
+end)
+)
+            if name then
+                name = trim(name)
+                if name ~= '' then
+                    running_capture.lines[#running_capture.lines + 1] = name
+                end
+            elseif trim(line) ~= '' and #running_capture.lines > 0 then
+                -- Do not accidentally interpret later chat messages as addons.
+                running_capture.finished = true
+                break
+            end
+        end
+    end
+end
+
+local function finish_loaded_capture(capture)
+    if running_capture ~= capture then return end
+    running_capture = nil
+    if not capture.started or #capture.lines == 0 then
+        msg('No loaded-addon output captured. Try //lua list, then //pm import file.', 123)
+        return
+    end
+
+    local installed, ok = installed_lookup()
+    if not ok then
+        msg('Installed directory unavailable; cannot safely resolve display names.', 123)
+        return
+    end
+    local index = installed_display_index(installed)
+    local names, ignored, unresolved = {}, 0, {}
+    for _, display in ipairs(capture.lines) do
+        local addon = index[canonical_key(display)]
+        if not addon then
+            unresolved[#unresolved + 1] = display
+        elseif addon == 'addontoggle' or addon == 'plugin_manager' then
+            ignored = ignored + 1
+        elseif not has_value(names, addon) then
+            names[#names + 1] = addon
+        end
+    end
+
+    local existing = read_profile(capture.target)
+    local additions = {}
+    for _, addon in ipairs(names) do
+        if not has_value(existing, addon) then
+            additions[#additions + 1] = addon
+        end
+    end
+    pending_import = {source = 'loaded', target = capture.target, names = additions}
+    msg(('Loaded snapshot (%d displayed) -> %s: %d new, %d protected, %d unresolved'):format(
+        #capture.lines, capture.target, #additions, ignored, #unresolved))
+    for _, addon in ipairs(additions) do msg('  + ' .. addon, 0) end
+    for _, name in ipairs(unresolved) do
+        msg('  ? Not mapped to an installed addon: ' .. name, 123)
+    end
+    msg('Only a snapshot of this client. No changes yet. //pm import confirm|cancel')
+end
+
+local function begin_loaded_capture(target)
+    if not target then msg('Specify a character or log in first.', 123); return end
+    if running_capture then
+        msg('Replacing previous loaded-list capture.', 123)
+    end
+    pending_import = nil
+    local capture = {target = target, started = false, finished = false, lines = {}}
+    running_capture = capture
+    msg('Requesting //lua list for this client; collecting its output...')
+    windower.send_command('lua list')
+    coroutine.schedule(function()
+        coroutine.sleep(2)
+        finish_loaded_capture(capture)
+    end, 0)
+end
+
+windower.register_event('incoming text', function(_, text, _, _, blocked)
+    if not blocked then capture_line(text) end
+end)
 
 local function preview_import(source, target)
     if not target then msg('Specify a character or log in first.', 123); return end
