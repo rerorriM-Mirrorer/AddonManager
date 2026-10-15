@@ -512,7 +512,10 @@ local function dispatch(...)
         else p, addon = current_profile(), normal(args[2]) end
         edit_profile(verb, p, addon)
     elseif verb == 'load' or verb == 'unload' then
-        if verb == 'unload' and (args[2] or ''):lower() == 'manager' then
+        if verb == 'load' and (args[2] or ''):lower() == 'all' then
+            -- Symmetric with "unload all": global + active character, deduplicated.
+            apply_current()
+        elseif verb == 'unload' and (args[2] or ''):lower() == 'manager' then
             generation = generation + 1
             windower.send_command('lua unload AddonToggle')
         elseif verb == 'unload' and (args[2] or ''):lower() == 'all' then
