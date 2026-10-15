@@ -470,7 +470,8 @@ local function import_command(source, target)
         if not pending_import then msg('Nothing awaiting confirmation.', 123); return end
         local p = pending_import
         -- Recheck the current global list at confirmation; global wins for characters.
-        local shared = p.target ~= 'global' and read_profile('global') or {}
+        local shared = p.source == 'loaded' and p.target ~= 'global'
+            and read_profile('global') or {}
         local safe = {}
         for _, addon in ipairs(p.names) do
             if not has_value(shared, addon) then safe[#safe + 1] = addon end
