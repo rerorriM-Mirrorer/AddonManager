@@ -6,6 +6,7 @@ local simulate_list = true
 
 package.preload['chat'] = function()
     string.color = function(self) return self end
+    string.strip_colors = function(self) return self end
     return {}
 end
 
