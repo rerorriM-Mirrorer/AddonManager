@@ -1,9 +1,39 @@
-# TESTING — AddonToggle / Profile Manager
+# TESTING — AddonManager
 
-**Development branch:** dev/profile-manager-v0.2
+**Development branch:** dev/addonmanager-v0.4
+**Version:** 0.4.0-dev.1
+**Date:** 2026-10-14
+**Status:** v0.3 live capture confirmed by user; v0.4 rename, global exclusion and pruning await in-game validation.
+
+## Batch 4 — Rename and global-aware character imports
+
+**Migration precautions:** Save copies of the previous AddonToggle folder and profiles. Install under **Windower/addons/AddonManager/AddonManager.lua**, copy the previous **AddonToggle/data/** directory to **AddonManager/data/**, and disable/unload old AddonToggle before running the new manager. Update startup commands. Old //pm and //at command prefixes intentionally no longer exist. The GitHub repository itself is still named AddonToggle until the owner renames it under Settings (administration action unavailable from the connector).
+
+- [ ] `lua load AddonManager` succeeds. `//am` and `//am help` show formatted commands; invalid `//am` shows help.
+- [ ] `//am status` shows current client character, version and counts.
+- [ ] `//am overlays` preserves the historical BarFiller/EquipViewer toggle.
+- [ ] `//am list global` and `//am list Cioara` preserve copied v0.3 profile files.
+- [ ] With global containing an addon, `//am import loaded Cioara` excludes it; preview also excludes entries already in Cioara.
+- [ ] `//am import loaded global` captures full loaded snapshot minus global's already saved entries; there is no global subtraction of itself beyond deduplication.
+- [ ] `//am import confirm` adds only the previewed character extras; `//am import cancel` leaves profiles untouched.
+- [ ] `//am prune Cioara` lists only overlap between global and Cioara, no immediate file modification.
+- [ ] `//am prune cancel` preserves file; `//am prune confirm` removes only previewed overlapping entries, does not unload any running addon, and leaves global unchanged.
+- [ ] `//am apply` and `//am load all` load global+current with one load request per entry and 1-second default staggering.
+- [ ] Restart and change character/client: per-character lists remain separate; no duplicate management from the retired addon.
+- [ ] Inspect `console.log` for syntax/runtime errors and `//lua list` for runtime confirmation.
+
+**Design note:** Cioara and global may contain identical broadly imported lists from initial test. Curate global *before* pruning and before concluding other character imports are complete. Prune never guesses which addons should be global.
+
+**Observed from user-provided v0.3 test evidence:** The user confirmed that loaded-list imports functioned and shared saved global/Cioara profile files showing imported entries. This upgrades the previous v0.3 capture uncertainty; it is not evidence v0.4 itself has been run in game.
+
+---
+
+# HISTORICAL TESTING — AddonToggle / Profile Manager
+
+**Development branch:** dev/profile-manager-v0.3
 **Version:** 0.3.0-dev.1
 **Date:** 2026-10-14
-**Status:** Code committed; no live FFXI testing has been performed.
+**Status at original delivery:** Live loaded snapshot had not yet been confirmed. **Subsequently confirmed by user** following v0.3 test.
 
 ## First install
 
@@ -75,6 +105,6 @@ There is no automatic unloading of finished addon loads at logout; only queued w
 - Original v1.0: Single //at toggle. No supplied original live test report.
 - 2026-10-14 Batch 1: New profiles/startup/list commands; awaiting live testing.
 - 2026-10-14 Batch 2: Installed directory scan and preview/import experiments; user reported profile manager works well; specific test boxes not yet individually verified.
-- 2026-10-14 Batch 3: Live-loaded import from //lua list added; capture itself awaiting in-game verification.
+- 2026-10-14 Batch 3: Live-loaded import from //lua list added; initially awaiting live verification. Subsequently confirmed by user to work; the observed imported profile files were supplied.
 
 Historical test records have not been fabricated. Corrections and later test findings should be appended, preserving the history.
