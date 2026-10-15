@@ -83,6 +83,8 @@ assert(type(events['addon command']) == 'function', 'addon command handler missi
 local am = events['addon command']
 events.load()
 assert(count_command('alias at lua c AddonManager legacy-toggle') == 0, 'obsolete alias unexpectedly created')
+assert(count_command('lua unload barfiller; wait 0.2; lua unload equipviewer') == 0,
+    'former overlay toggle still registered')
 am('add', 'global', 'EquipViewer')
 assert(contents('tmp_am/data/profiles/global.txt') == 'equipviewer\n', 'global list not saved')
 am('add', 'global', 'EquipViewer')
@@ -153,10 +155,6 @@ am('import', 'loaded', 'Myrr')
 am('import', 'confirm')
 assert(contents('tmp_am/data/profiles/myrr.txt') == '',
     'missing live output changed profile')
-
-am('overlays')
-assert(count_command('lua unload barfiller; wait 0.2; lua unload equipviewer') >= 1,
-    'legacy toggle broken')
 
 am('startup', 'off')
 am('delay', '0.5')
