@@ -113,5 +113,16 @@ assert(contents('tmp_pm/data/options.txt'):find('delay=0.5', 1, true),
     'settings not saved')
 events.logout()
 who = 'Cioara'
+local prior = count_command('lua load enemybar2')
 events.login('Cioara')
+assert(count_command('lua load enemybar2') == prior, 'startup off still loaded addon')
+pm('startup', 'on')
+events.logout()
+events.login('Cioara')
+assert(count_command('lua load enemybar2') == prior + 1,
+    'actual login did not automatically load character profile')
+local global_before = count_command('lua load equipviewer')
+assert(global_before >= 1, 'global profile not loaded')
+pm('unload', 'manager')
+assert(count_command('lua unload AddonToggle') >= 1, 'explicit manager unload missing')
 print('AddonToggle mock smoke test: PASS (' .. #commands .. ' Windower commands)')
