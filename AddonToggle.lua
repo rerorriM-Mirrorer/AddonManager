@@ -153,6 +153,10 @@ local function edit_profile(verb, profile, addon)
         msg('Usage: //pm ' .. verb .. ' [global|character] <addon>', 123)
         return
     end
+    if verb == 'add' and (addon == 'addontoggle' or addon == 'plugin_manager') then
+        msg('The managers themselves cannot be added to profiles.', 123)
+        return
+    end
     local installed, scanned = is_installed(addon)
     if verb == 'add' and scanned and not installed then
         msg(addon .. ' not found in the addon directory. Nothing saved.', 123)
@@ -238,6 +242,8 @@ local function print_help()
         {'//pm delay [seconds]', 'Show or set stagger interval (0..10)'},
         {'//pm startup on|off', 'Automatic profile load after login'},
         {'//pm status', 'Current character, profiles, queue info'},
+        {'//pm restart', 'Reload the profile manager'},
+        {'//pm unload manager', 'Unload the profile manager itself'},
         {'//at', 'Original BarFiller/EquipViewer toggle'},
     }
     for _, line in ipairs(lines) do
@@ -394,7 +400,10 @@ local function dispatch(...)
         else p, addon = current_profile(), normal(args[2]) end
         edit_profile(verb, p, addon)
     elseif verb == 'load' or verb == 'unload' then
-        if verb == 'unload' and (args[2] or ''):lower() == 'all' then
+        if verb == 'unload' and (args[2] or ''):lower() == 'manager' then
+            generation = generation + 1
+            windower.send_command('lua unload AddonToggle')
+        elseif verb == 'unload' and (args[2] or ''):lower() == 'all' then
             local who = current_profile()
             if not who then msg('Log in to use //pm unload all', 123); return end
             command_items('unload', combine(read_profile('global'), read_profile(who)),
@@ -441,9 +450,6 @@ local function dispatch(...)
     elseif verb == 'restart' then
         generation = generation + 1
         windower.send_command('lua reload AddonToggle')
-    elseif verb == 'unload-manager' then
-        generation = generation + 1
-        windower.send_command('lua unload AddonToggle')
     else
         msg('Unknown command: ' .. verb, 123)
         print_help()
