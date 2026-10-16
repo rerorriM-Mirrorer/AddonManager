@@ -55,3 +55,9 @@ There is no automatic unloading of finished addon loads at logout; only queued w
 - 2026-10-14 Batch 2: Installed directory scan and preview/import experiments; awaiting live testing.
 
 Historical test records have not been fabricated. Corrections and later test findings should be appended, preserving the history.
+
+## Agent instructions adoption — 2026-10-16
+
+- Added `AGENTS.md` at this development branch's repository root to direct coding agents to the current workflow and testing records, with a canonical NPCMirror fallback when documents are missing.
+- Documentation commit: [`0529c04c`](https://github.com/rerorriM-Mirrorer/AddonManager/commit/0529c04c1da3201232a23baaf9440ab3c43acd4d).
+- No addon code was changed or game testing performed as part of this documentation update; all previous test instructions and observations remain above.
