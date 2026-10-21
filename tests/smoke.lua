@@ -27,10 +27,10 @@ windower = {
             local path = 'tmp_windower/logs/' .. name .. '_' .. os.date('%Y.%m.%d') .. '.log'
             local file = assert(io.open(path, 'a'))
             if logger_emulation == 'full' then
-                file:write('Currently loaded addons:\\n  Equipviewer\\n  Battle Stations\\n',
-                    '  Job Change\\n  Logger\\n  AddonManager\\n')
+                file:write('Currently loaded addons:\n  Equipviewer\n  Battle Stations\n',
+                    '  Job Change\n  Logger\n  AddonManager\n')
             elseif logger_emulation == 'header' then
-                file:write('Currently loaded addons:\\n')
+                file:write('Currently loaded addons:\n')
             end
             file:close()
         end
@@ -191,7 +191,7 @@ assert(#commands == commands_before_bare, 'bare all reload issued an unsafe comm
 -- but AddonManager's own incoming-text capture sees none.
 simulate_list = false
 local log_path = 'tmp_windower/logs/Myrr_' .. os.date('%Y.%m.%d') .. '.log'
-file(log_path, 'Currently loaded addons:\\n  Equipviewer\\n')
+file(log_path, 'Currently loaded addons:\n  Equipviewer\n')
 local before_stale = #chats
 am('audit') -- Logger exists, but no NEW bytes were written for this request.
 local stale_recovered = false
