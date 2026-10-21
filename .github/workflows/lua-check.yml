@@ -15,13 +15,13 @@ jobs:
       - name: Install Lua 5.1
         run: sudo apt-get update && sudo apt-get install -y lua5.1
       - name: Static syntax check
-        run: luac5.1 -p AddonManager.lua && luac5.1 -p am_cluster.lua && luac5.1 -p tests/smoke.lua && luac5.1 -p tests/ipc.lua
+        run: luac5.1 -p AddonManager.lua && luac5.1 -p am_cluster.lua && luac5.1 -p am_console.lua && luac5.1 -p tests/smoke.lua && luac5.1 -p tests/ipc.lua && luac5.1 -p tests/console.lua
       - name: Mock Windower smoke test
-        run: lua5.1 tests/smoke.lua && lua5.1 tests/ipc.lua
+        run: lua5.1 tests/smoke.lua && lua5.1 tests/ipc.lua && lua5.1 tests/console.lua
       - name: Assemble installable testing ZIP
         run: |
           mkdir -p package/AddonManager
-          cp AddonManager.lua am_cluster.lua README.md WORKFLOW.md TESTING.md package/AddonManager/
+          cp AddonManager.lua am_cluster.lua am_console.lua README.md WORKFLOW.md TESTING.md package/AddonManager/
           (cd package && zip -r ../AddonManager-testing-batch.zip .)
       - name: Upload testing package
         uses: actions/upload-artifact@v4
