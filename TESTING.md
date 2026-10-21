@@ -1,5 +1,49 @@
 # TESTING — AddonManager
 
+**Development branch:** `dev/addonmanager-v0.5`
+**Version:** 0.5.0-dev.1
+**Date:** 2026-10-20
+**Status:** New multiclient IPC and startup verification committed for simulated and live testing. No v0.5 in-game verification yet.
+
+## Batch 5 — Staggered load/reload and startup audit
+
+**Install:** Back up your existing `Windower/addons/AddonManager/` folder and its `data/` directory. Extract the entire new `AddonManager/` folder, including **AddonManager.lua, am_cluster.lua, README.md, WORKFLOW.md and TESTING.md**. Leave existing `data/profiles/*.txt` and `data/options.txt` intact. Reload with `//lua reload AddonManager` on each participating client. The IPC protocol requires **the new version in every participating client**. The main/release branch is not touched; development work stays on this branch.
+
+**Startup verification:** This build defaults `//am verify on`. A completed login profile queue waits three more seconds, executes `lua list`, then observes its incoming-text output for two seconds. Because Windower offers no documented silent `lua list`, visible list output may occur. Audit is read-only, never unloads or reloads, and an empty capture is **inconclusive**, not all missing. Use `//am verify off` if the output is distracting, and `//am audit` to test manually.
+
+**Cross-client IPC:** From one logged-in client on the **same computer**, send `//am all load trust` or `//am all reload xivcrossbar`. Participating characters appear in alphabetical order, followed by the initiator. The default two-second stagger begins after each dispatch acknowledgement; an acknowledgement is not addon-readiness confirmation. The IPC does not reach a different PC/laptop, and `//am all reload` without an addon intentionally does nothing. Do not send the same command to all clients via Send.
+
+### Live checklist — please report results
+
+- [ ] On two clients, check `//am help`, `//am status`, `//am stagger` (default 2), and `//am verify`.
+- [ ] `//am all load trust`: exactly one load request per participating client; initiator last; print order. Confirm no cross-client duplicate loads or unexpected hard freezes.
+- [ ] `//am all reload trust`: same ordering and gap; verify actual in-game Trust UI behavior. Also try `xivcrossbar` and `switch_focus` only if installed on all clients.
+- [ ] `//am stagger 2.5` changes the cross-client gap; `//am delay` still controls only within-client startup list spacing. Both save to `data/options.txt`.
+- [ ] `//am all cancel` during discovery or between clients cancels remaining dispatches; no retry loops or late reloads.
+- [ ] Client missing AddonManager is omitted from the roster; missing addon in a participating client rejects the batch. Ensure each client reports independently.
+- [ ] One unresponsive participant stops the remaining queue after timeout; no duplicate send or infinite wait.
+- [ ] Test `//am all reload` bare and `//am all reload addonmanager`: show validation errors, no widespread or self reloads.
+- [ ] With a normal character login and `verify on`, wait until profile commands have dispatched + settling period. Audit reports counts; identify any expected addons falsely marked missing.
+- [ ] Run `//am audit`: compare with manual `//lua list`, report counts of matched/missing/unmanaged/unresolved; do not mark native Windower addons as failures.
+- [ ] With `verify off` and after a client reload, automatic audit does not run; manually running `//am audit` still works.
+- [ ] If `lua list` capture fails or is empty, audit says **inconclusive** and no changes are performed. Recheck `//am import loaded` still previews and confirms correctly.
+- [ ] Logout/character change during a queued load or group operation cancels remaining work.
+- [ ] Confirm existing profile files, delay/startup settings, prune and import functionality remain intact.
+
+### Verification evidence and outstanding design questions
+
+- Prior v0.4 loaded-list import has user-confirmed success; v0.5 **not** yet tested in actual FFXI.
+- New `am_cluster.lua` uses Windower same-computer IPC. Roster discovery and dispatch acknowledgements are not proof that an addon is fully initialized.
+- Current v0.5 verification uses the incoming-text capture method. Verify that background startup `lua list` is observable on each client's Windower build. If not, keep this optional rather than silently claiming success.
+- An audit run overlapping a manual import is skipped rather than destroying an import preview. No retries, no automatic unloading, no enforcement of unmanaged addons.
+- Historical v0.4 note that the repository was named AddonToggle was accurate at its original writing; the repository was subsequently renamed **AddonManager** by the user.
+
+**Development register:** Core IPC coordinator commit `e0912775`, main addon/audit integration `d3ef2cc9`, multi-client simulated test `e5992d84`. CI and corrective commits are included in branch history. Build ZIP must correspond to final branch commit; inspect GitHub Actions before delivering. No actual FFXI tests have been performed for this version.
+
+---
+
+# PREVIOUS TESTING — AddonManager
+
 **Development branch:** dev/addonmanager-v0.4
 **Version:** 0.4.0-dev.2
 **Date:** 2026-10-14
