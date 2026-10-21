@@ -1,7 +1,7 @@
 # AddonManager
 
 **Author:** Max and A
-**Development version:** 0.5.0-dev.1
+**Development version:** 0.5.0-dev.2
 **Windower:** FFXI / Windower 4 (Lua 5.1)
 **Commands:** //am
 
@@ -14,7 +14,7 @@ Manage **Lua addons** with persistent global and per-character lists. Inspired b
 3. Disable the original AddonToggle and Windower plugin_manager in startup configuration; do not run two profile managers simultaneously. Keep the old AddonToggle folder as an offline backup.
 4. Load from the console with `lua load AddonManager` or enable the new folder through the Windower launcher. Type `//am help`.
 5. Replace references to old `//pm` and `//at` commands in macros and scripts; **neither alias is registered**. The BarFiller/EquipViewer pair-toggle has been retired.
-6. **v0.5 is a development build not yet tested live.** The preceding v0.3 live snapshot capture was successfully tested in game on 2026-10-14. Preserve your original init.txt loading until you verify startup behavior on each client.
+6. **v0.5.0-dev.2 is a development build awaiting in-game testing.** The user observed an inconclusive v0.5.0-dev.1 audit while Windower's Logger captured the complete list; this update tests an optional file-based fallback. Preserve your working startup configuration while validating the new build.
 
 AddonManager itself should be started through Windower, so that it receives actual character login events. Other addon startup arrangements may remain independent.
 
@@ -70,12 +70,14 @@ Once an automatic login profile queue finishes issuing its commands, AddonManage
 
 Use `//am audit` to repeat the same snapshot manually, or `//am verify off` to stop automatic post-login audits. Startup verification is on by default. A failed or empty `lua list` capture is reported as **inconclusive**, not treated as every addon being missing. A capture already in progress isn't overwritten.
 
-**Visibility:** Windower's documented `lua list` has no supported silent argument. AddonManager avoids an additional verbose chat report on success, but cannot guarantee that Windower's own list output remains invisible. The capture uses the same experimental incoming-text approach that was previously observed working with imports; v0.5 needs live verification.
+**Logger fallback (v0.5.0-dev.2):** If AddonManager's own `incoming text` listener captures no names, it checks `Windower/logs/<Character>_YYYY.MM.DD.log`, written by Windower's official **Logger addon** when Logger is running. It records the file's end position **before** requesting `lua list`, then accepts only a new heading and names appended since that position. Old entries never count as proof. The report announces when a fresh Logger snapshot was used; the fallback is optional and does not start Logger or change any profiles. If neither source works, the new inconclusive message distinguishes the missing incoming-text heading from missing/empty Logger output.
+
+**Visibility:** Windower's documented `lua list` has no supported silent argument. AddonManager avoids an additional verbose chat report on success, but cannot guarantee that Windower's own list output remains invisible. The capture first tries incoming-text events and, only if those yield no names, the fresh Logger append. The new fallback still needs live FFXI confirmation; neither method grants direct access to LuaCore's loaded-addon registry.
 
 
 ## Experimental imports
 
-**Live loaded-addon import (v0.4):** Run `//am import loaded` from a logged-in client. It defaults to that character's profile. The command runs `lua list` and captures current-client output through incoming-text events, then maps display names (e.g. `Battle Stations`) to installed folder names. It excludes AddonManager, historical AddonToggle, and plugin_manager.
+**Live loaded-addon import (v0.4):** Run `//am import loaded` from a logged-in client. It defaults to that character's profile. The command runs `lua list` and captures current-client output through incoming-text events (or newly appended Logger output if necessary), then maps display names (e.g. `Battle Stations`) to installed folder names. It excludes AddonManager, historical AddonToggle, and plugin_manager.
 
 For any **character** target, it subtracts both the **saved global profile** and entries already present in the character profile. For **global** itself, it subtracts only entries already saved in global. The preview reports the total observed, global-covered count, already-saved count, protected names, and unmatched names. `//am import confirm` saves just new entries after rechecking global; `//am import cancel` discards them. This never immediately loads or unloads an addon.
 
@@ -112,6 +114,7 @@ Run //am import file Cioara to read plain addon names (one per line, optional # 
 - **2026-10-14 / Batch 4 experimental (v0.4):** Rename installable addon to AddonManager with //am only; exclude global entries from character loaded imports; preview-confirm character pruning for existing global duplicates.
 - **2026-10-14 / Batch 4 refinement (v0.4.0-dev.2):** Remove the now-unneeded historical BarFiller/EquipViewer toggle and its command entirely.
 - **2026-10-20 / Batch 5 (v0.5.0-dev.1):** Acknowledged same-computer IPC for one-addon staggered load/reload, adjustable two-second gap, safe cancellation, post-login live-list verification, manual audit, and switchable read-only startup checks.
+- **2026-10-21 / Batch 5b (v0.5.0-dev.2):** Optional fresh Logger-file fallback for audits/imports after user-observed live-text capture failure; reject old/empty snapshots, report capture-source reasons, and retain read-only audit behavior.
 
 ## Attribution
 
