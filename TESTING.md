@@ -3,9 +3,11 @@
 **Branch:** `dev/addonmanager-v0.5-safe-reload`
 **Version:** 0.5.0-dev.3
 **Date:** 2026-10-21
-**Status:** Automated Lua 5.1 syntax and simulated behavior checks passed on the development branch. **Safe reload and Logger fallback have not been verified in live FFXI.** The previous branches are preserved.
+**Status:** Automated Lua 5.1 syntax and simulated behavior checks passed. **Cioara safe-reload all-present path confirmed by user in live FFXI on 2026-10-21.** The exact capture source (live listener versus Logger fallback), missing-only reload, and fail-closed behavior remain unverified live. Previous branches are preserved.
 
 ## Batch 5c — Audit before addon reload; load only missing addons
+
+**Live user report (2026-10-21, Cioara):** Following an AddonManager restart during gameplay, user reported: **“All configured addons already running. Nothing to load.”** This confirms the live audit's all-present/no-work decision in that session. The report does not establish which capture path succeeded, prove that no underlying Windower command was emitted beyond the audited decision, or validate missing-only loading and inconclusive handling. Those remain pending.
 
 **User request:** Reloading AddonManager while already playing should avoid issuing 30+ redundant `lua load` requests. It should automatically inspect the client's currently loaded addons, compare them with the saved global and character profiles, and load only entries genuinely absent. The user also asked how Logger gets its text and whether AddonManager can use Logger's stream for verification.
 
@@ -23,7 +25,7 @@
 ### Install + in-game tests (pending)
 
 1. Back up `Windower/addons/AddonManager/`, especially `data/profiles/` and `data/options.txt`. Extract the complete replacement addon folder containing `AddonManager.lua`, `am_cluster.lua`, `README.md`, `WORKFLOW.md`, `TESTING.md`; **do not replace the existing `data/` directory.**
-2. On an already-playing Cioara with Logger running, run `//lua reload AddonManager`. Expect `Safe reload: auditing...`, an audit summary (or Logger recovery notice), then **no load requests** if all configured addons are running. Confirm no duplicate-load errors.
+2. On an already-playing Cioara with Logger running, run `//lua reload AddonManager`. Expect `Safe reload: auditing...`, an audit summary (or Logger recovery notice), then **no load requests** if all configured addons are running. Confirm no duplicate-load errors. **PARTIALLY CONFIRMED LIVE:** User reported all configured running / nothing to load after restart; no detailed console trace or explicit duplicate-error check supplied.
 3. Deliberately unload one noncritical addon that exists in the profile, then reload AddonManager again. Expect **only that addon** to receive `lua load`. Verify visually/in `lua list`.
 4. With all entries already running, reload AddonManager again. Expect a successful audit and **zero load requests**.
 5. Reproduce failed capture safely by unloading Logger (where AM's own live-event capture is also known to fail). Reload AM; it must say verification was inconclusive and **issue no load requests**. Restore Logger manually.
