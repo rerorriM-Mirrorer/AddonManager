@@ -3,6 +3,7 @@ _addon = {}
 local events, commands, chats = {}, {}, {}
 local who = 'Myrr'
 local simulate_list = true
+local reload_list = nil -- Override simulated lua list for safe-reload tests
 local logger_emulation = 'off' -- Simulated Logger disk output, distinct from incoming text
 
 package.preload['chat'] = function()
@@ -35,7 +36,7 @@ windower = {
             file:close()
         end
         if command == 'lua list' and simulate_list then
-            local lines = {
+            local lines = reload_list or {
                 'Currently loaded addons:',
                 '  Equipviewer',
                 '  Battle Stations',
@@ -104,6 +105,33 @@ am('add', 'global', 'EquipViewer')
 assert(contents('tmp_am/data/profiles/global.txt') == 'equipviewer\n', 'duplicate entry added')
 am('add', 'Myrr', 'BarFiller')
 assert(contents('tmp_am/data/profiles/myrr.txt') == 'barfiller\n', 'character list not saved')
+
+-- Reload while logged in must audit first; only missing items may be loaded.
+reload_list = {'Currently loaded addons:', '  Equipviewer', '  AddonManager'}
+local equip_at_reload = count_command('lua load equipviewer')
+local bar_at_reload = count_command('lua load barfiller')
+events.load() -- Mock addon reload; character still logged in.
+assert(count_command('lua load equipviewer') == equip_at_reload,
+    'safe reload sent duplicate load for a running addon')
+assert(count_command('lua load barfiller') == bar_at_reload + 1,
+    'safe reload failed to load a missing addon')
+local bar_after_reconcile = count_command('lua load barfiller')
+reload_list = {'Currently loaded addons:', '  Equipviewer', '  BarFiller', '  AddonManager'}
+events.load()
+assert(count_command('lua load barfiller') == bar_after_reconcile,
+    'safe reload reloaded an already-running addon')
+reload_list = {'Currently loaded addons:', '  Equipviewer'}
+local before_incomplete = #commands
+events.load()
+assert(count_command('lua load barfiller') == bar_after_reconcile,
+    'incomplete list unexpectedly authorized loading')
+reload_list = nil
+simulate_list = false
+local before_failed = #commands
+events.load()
+assert(#commands == before_failed + 1 and commands[#commands] == 'lua list',
+    'failed safe reload should only issue lua list, never any loads')
+simulate_list = true
 
 am('apply')
 local count_before_all = count_command('lua load equipviewer')
