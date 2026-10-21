@@ -4,7 +4,7 @@
 -- No code copied from the original plugin_manager; see README for historical inspiration.
 _addon.name = 'AddonManager'
 _addon.author = 'Max and A'
-_addon.version = '0.5.0-dev.1'
+_addon.version = '0.5.0-dev.2'
 _addon.commands = {'am'}
 
 require('chat')
@@ -353,30 +353,73 @@ local function parse_legacy(s, profile)
     return nil
 end
 
--- Capture //lua list output through the same incoming-text stream used by
--- Windower's Logger addon. This is an experimental live snapshot, not a
--- direct API exposing the runtime addon registry.
-local function capture_line(value)
-    if not running_capture or running_capture.finished or type(value) ~= 'string' then return end
+-- Both the live incoming-text event and Logger's saved output use this parser.
+local function capture_line(value, snapshot)
+    snapshot = snapshot or running_capture
+    if not snapshot or snapshot.finished or type(value) ~= 'string' then return end
     value = value:strip_colors()
     for line in value:gmatch('[^\r\n]+') do
+        -- Logger optionally adds HH:MM:SS timestamps.
+        line = line:gsub('^%d%d:%d%d:%d%d%s+', '')
         if line:find('Currently loaded addons:', 1, true) then
-            running_capture.started = true
-            running_capture.lines = {}
-        elseif running_capture.started then
+            snapshot.started = true
+            snapshot.lines = {}
+        elseif snapshot.started then
             local name = line:match('^  +(.+)$')
             if name then
                 name = trim(name)
                 if name ~= '' then
-                    running_capture.lines[#running_capture.lines + 1] = name
+                    snapshot.lines[#snapshot.lines + 1] = name
                 end
-            elseif trim(line) ~= '' and #running_capture.lines > 0 then
-                -- Ignore any following unrelated game chat after the list.
-                running_capture.finished = true
+            elseif trim(line) ~= '' and #snapshot.lines > 0 then
+                snapshot.finished = true
                 break
             end
         end
     end
+end
+
+-- Optional Logger-file fallback: remember EOF BEFORE requesting lua list.
+-- Only appended bytes from this request can become a new snapshot.
+local function logger_watermark()
+    local player = windower.ffxi.get_player()
+    local name = player and player.name
+    if not valid_name(name) or not windower.windower_path then return nil end
+    local path = windower.windower_path .. 'logs/' ..
+        name .. '_' .. os.date('%Y.%m.%d') .. '.log'
+    local f = io.open(path, 'rb')
+    local offset = 0
+    if f then offset = f:seek('end') or 0; f:close() end
+    return {path = path, offset = offset}
+end
+
+local function logger_fallback(capture)
+    local source = capture.logger
+    if not source then return false, 'path unavailable' end
+    local f = io.open(source.path, 'rb')
+    if not f then return false, 'Logger file unavailable' end
+    local size = f:seek('end')
+    if not size or size < source.offset then
+        f:close()
+        return false, 'Logger file truncated'
+    end
+    local new_bytes = size - source.offset
+    if new_bytes > 131072 then
+        f:close()
+        return false, 'Logger output exceeded safe capture limit'
+    end
+    f:seek('set', source.offset)
+    local data = f:read(new_bytes) or ''
+    f:close()
+    if data == '' then return false, 'no new Logger text' end
+    local snapshot = {started = false, finished = false, lines = {}}
+    capture_line(data, snapshot)
+    if not snapshot.started then return false, 'no list heading in new Logger text' end
+    if #snapshot.lines == 0 then return false, 'heading but no names in new Logger text' end
+    capture.started = true
+    capture.lines = snapshot.lines
+    capture.snapshot_source = 'Logger fresh append'
+    return true
 end
 
 local function finish_audit(capture)
@@ -421,12 +464,24 @@ end
 
 local function finish_loaded_capture(capture)
     if running_capture ~= capture then return end
+    local logger_reason
+    if not capture.started or #capture.lines == 0 then
+        local recovered
+        recovered, logger_reason = logger_fallback(capture)
+        if recovered then
+            msg(('Recovered %d addon names from new Logger text.'):format(#capture.lines))
+        end
+    end
     running_capture = nil
     if not capture.started or #capture.lines == 0 then
+        local live_reason = capture.started and 'heading detected, no entries' or
+            'list heading not received'
+        local detail = 'incoming text: ' .. live_reason ..
+            '; Logger: ' .. (logger_reason or 'not available')
         if capture.kind == 'audit' then
-            msg('Audit inconclusive: lua list produced no captured entries (nothing assumed missing).', 123)
+            msg('Audit inconclusive (' .. detail .. '). No changes made.', 123)
         else
-            msg('Could not capture //lua list. No import prepared; //am import file remains available.', 123)
+            msg('Loaded import inconclusive (' .. detail .. '). No import prepared.', 123)
         end
         return
     end
@@ -476,7 +531,8 @@ local function begin_loaded_capture(target)
     if running_capture then msg('A lua-list capture is in progress. Try again shortly.', 123); return end
     pending_import = nil
     pending_prune = nil
-    local capture = {target = target, started = false, finished = false, lines = {}}
+    local capture = {target = target, started = false, finished = false,
+        lines = {}, logger = logger_watermark()}
     running_capture = capture
     msg('Requesting //lua list and capturing this client...')
     windower.send_command('lua list')
@@ -494,7 +550,8 @@ begin_audit = function(source)
         return
     end
     local capture = {kind = 'audit', source = source, character = who,
-        started = false, finished = false, lines = {}}
+        started = false, finished = false, lines = {},
+        logger = logger_watermark()}
     running_capture = capture
     if source == 'manual' then
         msg('Auditing this client against global + ' .. who ..
