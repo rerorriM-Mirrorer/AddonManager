@@ -119,7 +119,7 @@ return function(api)
 
         local s = active
         if verb == 'probe' then
-            local action, addon = value:match('^(%a+):([%a][%w_%-]*)            if (action ~= 'load' and action ~= 'reload') or not addon then return end
+            local action, addon = value:match("^(%a+):([%a][%w_%-]*)$")
             if seen[token] then
                 if s and s.token == token and s.leader == from then send(from, 'ready', token) end
                 return
