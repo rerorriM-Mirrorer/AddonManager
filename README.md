@@ -1,7 +1,7 @@
 # AddonManager
 
 **Author:** Max and A
-**Development version:** 0.5.0-dev.3
+**Development version:** 0.5.0-dev.4
 **Windower:** FFXI / Windower 4 (Lua 5.1)
 **Commands:** //am
 
@@ -14,7 +14,7 @@ Manage **Lua addons** with persistent global and per-character lists. Inspired b
 3. Disable the original AddonToggle and Windower plugin_manager in startup configuration; do not run two profile managers simultaneously. Keep the old AddonToggle folder as an offline backup.
 4. Load from the console with `lua load AddonManager` or enable the new folder through the Windower launcher. Type `//am help`.
 5. Replace references to old `//pm` and `//at` commands in macros and scripts; **neither alias is registered**. The BarFiller/EquipViewer pair-toggle has been retired.
-6. **v0.5.0-dev.3 is a development build awaiting live FFXI validation.** This build adds audit-before-loading on AddonManager reload and retains the Logger recovery added in dev.2. Back up profiles and options; on a failed snapshot, nothing is loaded automatically.
+6. **v0.5.0-dev.4 is an experimental console-capture development build.** Safe reload and missing-only GilFinder recovery were verified in-game on Cioara with v0.5.0-dev.3. The new console capture has only simulated verification; retain your known-good version and the data directory for rollback.
 
 AddonManager itself should be started through Windower, so that it receives actual character login events. Other addon startup arrangements may remain independent.
 
@@ -46,6 +46,7 @@ AddonManager itself should be started through Windower, so that it receives actu
 | //am delay [seconds] | Set spacing between load requests (0–10, default 1) |
 | //am startup on/off | Enable or disable auto-loading on character login |
 | //am audit | Compare loaded addons with global + this character; read-only |
+| //am capture [console|chat] | Console log (quiet, default) or previous chat/Logger capture |
 | //am verify on/off | Enable/disable audit after startup queues (default on) |
 | //am status | Show character, counts, and request totals |
 | //am restart | Reload AddonManager itself |
@@ -70,10 +71,20 @@ On a **fresh character-login event**, AddonManager retains the existing automati
 
 Use `//am audit` to repeat the same snapshot manually, or `//am verify off` to stop automatic post-login audits. Startup verification is on by default. A failed or empty `lua list` capture is reported as **inconclusive**, not treated as every addon being missing. A capture already in progress isn't overwritten.
 
-**Logger fallback (v0.5.0-dev.2):** If AddonManager's own `incoming text` listener captures no names, it checks `Windower/logs/<Character>_YYYY.MM.DD.log`, written by Windower's official **Logger addon** when Logger is running. It records the file's end position **before** requesting `lua list`, then accepts only a new heading and names appended since that position. Old entries never count as proof. The report announces when a fresh Logger snapshot was used; the fallback is optional and does not start Logger or change any profiles. If neither source works, the new inconclusive message distinguishes the missing incoming-text heading from missing/empty Logger output.
+**Chat-mode Logger fallback (v0.5.0-dev.2):** If AddonManager's own `incoming text` listener captures no names, it checks `Windower/logs/<Character>_YYYY.MM.DD.log`, written by Windower's official **Logger addon** when Logger is running. It records the file's end position **before** requesting `lua list`, then accepts only a new heading and names appended since that position. Old entries never count as proof. The report announces when a fresh Logger snapshot was used; the fallback is optional and does not start Logger or change any profiles. If neither source works, the new inconclusive message distinguishes the missing incoming-text heading from missing/empty Logger output.
 
 **Visibility:** Windower's documented `lua list` has no supported silent argument. AddonManager avoids an additional verbose chat report on success, but cannot guarantee that Windower's own list output remains invisible. The capture first tries incoming-text events and, only if those yield no names, the fresh Logger append. The new fallback still needs live FFXI confirmation; neither method grants direct access to LuaCore's loaded-addon registry.
 
+
+## Quieter console-based addon auditing (v0.5.0-dev.4)
+
+**Default:** `//am capture console`. AddonManager queries `lua list console` instead of sending the list into the FFXI chatlog. It looks for the resulting output in Windower's native `Windower/console.log` file. The built-in console always exists, but **console-file logging is optional and normally off**. Our ConsoleBGPlus fork explicitly issues `console_log 1` on initialization; the Windower Config plugin does not guarantee this. AddonManager **does not** change `console_log` or popup settings itself.
+
+A fresh request is bracketed by two unique `console_echo` markers before and after `lua list console`. AddonManager remembers the existing log's end position, then accepts only a complete, marker-bounded list. Since multiple Windower clients may write to the shared `console.log`, an overlapping marker, duplicate heading, missing end marker, malformed result or missing logfile causes an **inconclusive** result. Safe reload issues **no addon load requests** when capture is inconclusive.
+
+`//am capture chat` switches back to the previously working `lua list` + incoming-text/Logger-file route, with the choice persisted to `AddonManager/data/options.txt`. If `console.log` is absent, the console mode reports that you need `console_log 1` (or the active ConsoleBGPlus addon) and **does not silently revert to chat**, avoiding a surprise sixty-line dump. Manual `//am audit` and `//am import loaded` use the selected source too; imports remain preview-only until confirmed. Explicit `//am apply` remains an unfiltered manual load action.
+
+This mode is **unverified in live FFXI**. The console's on-screen output may still appear; only the game chatlog is intended to be spared. Console output syntax and marker ordering need the in-game checks in TESTING.md.
 
 ## Safe reload reconciliation (v0.5.0-dev.3)
 
@@ -125,7 +136,8 @@ Run //am import file Cioara to read plain addon names (one per line, optional # 
 - **2026-10-14 / Batch 4 refinement (v0.4.0-dev.2):** Remove the now-unneeded historical BarFiller/EquipViewer toggle and its command entirely.
 - **2026-10-20 / Batch 5 (v0.5.0-dev.1):** Acknowledged same-computer IPC for one-addon staggered load/reload, adjustable two-second gap, safe cancellation, post-login live-list verification, manual audit, and switchable read-only startup checks.
 - **2026-10-21 / Batch 5b (v0.5.0-dev.2):** Optional fresh Logger-file fallback for audits/imports after user-observed live-text capture failure; reject old/empty snapshots, report capture-source reasons, and retain read-only audit behavior.
-- **2026-10-21 / Batch 5c (v0.5.0-dev.3):** Mid-session manager reload now audits first and issues load requests only for verified missing profile entries; failed or partial captures stop automatic loading without disturbing existing addons. Fresh character-login startup behavior preserved.
+- **2026-10-21 / Batch 5c (v0.5.0-dev.3):** Mid-session manager reload now audits first and issues load requests only for verified missing profile entries; failed or partial captures stop automatic loading without disturbing existing addons. Fresh character-login startup behavior preserved. **Live Cioara all-present and GilFinder missing-only tests passed.**
+- **2026-10-21 / Batch 5d (v0.5.0-dev.4):** Experimental quiet `lua list console` capture with marker-bounded `console.log` parsing; `//am capture console|chat` persists the source choice; no change to console logging or chat suppression. Tests simulated only.
 
 ## Attribution
 
