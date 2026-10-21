@@ -1,5 +1,46 @@
 # TESTING — AddonManager
 
+**Development branch:** `dev/addonmanager-v0.5-logger-audit`
+**Version:** 0.5.0-dev.2
+**Date:** 2026-10-21
+**Status:** **User confirmed v0.5.0-dev.1 audit failure in-game; v0.5.0-dev.2 Logger fallback awaits live testing.** The existing profile loading has not been modified.
+
+## Batch 5b — Recover loaded-addon snapshots from Logger
+
+**Observed evidence from the user (Cioara, October 21, 2026):** Logger's daily file contained two complete `Currently loaded addons:` blocks, each including `AddonManager` and ~60 other addons, followed by `[AM] Audit inconclusive: lua list produced no captured entries (nothing assumed missing).` The user also confirmed the list appeared in the chatlog on both manual and AddonManager-invoked `lua list`. This proves Logger received the text while AddonManager's live capture did not produce entries. It does **not** establish why the two subscribers differed (event delivery, parser or timing).
+
+**Source investigation:** Official Windower Logger `addons/Logger/Logger.lua` uses `incoming text`, strips chat colors and appends output to `Windower/logs/<Character>_YYYY.MM.DD.log`. AddonManager already used the same `incoming text` event. No Windower internal registry or silent-list API is assumed.
+
+**New behavior:** Before each `//am audit` or `//am import loaded`, remember today's character-specific Logger file length. If the event capture has no addon entries after two seconds, inspect **only bytes appended after that watermark** (up to 128 KiB); accept only a fresh loaded-addon heading followed by at least one addon line. Old lists and header-only captures are rejected as inconclusive. The normal event capture remains preferred. All audits stay read-only; imports still require confirmation. The fallback is optional; Logger is not loaded automatically or required for other AddonManager functions.
+
+### Install and first live checks
+
+1. Back up the working `Windower/addons/AddonManager` directory, especially `data/`. Install the new `AddonManager` folder, including `AddonManager.lua`, `am_cluster.lua`, README, WORKFLOW and TESTING. Do not delete or replace existing profile/settings files.
+2. Ensure the official Logger addon is already running on Cioara; run `//lua list` and confirm its output appears in the character's Logger log.
+3. Run `//am audit` and check for `Recovered N addon names from new Logger text.`, followed by `Audit cioara: ...`. If the normal live event capture starts working, no fallback message is expected; a completed audit is still the success condition.
+4. Inspect the missing/unmanaged counts against Cioara's actual saved global/character profiles. Windower-managed native addons may be reported as unmanaged and are not errors.
+5. Re-run `//am audit` immediately to ensure the second snapshot is freshly collected; it must not reuse the first. An empty or absent Logger file must still yield an inconclusive report instead of claiming missing addons.
+6. Optionally try `//am import loaded Cioara`; it should show a preview from a fresh list and **not save anything** until `//am import confirm`. Use `//am import cancel` after checking the preview.
+7. If successful, test `//am verify on` at next login. If the built-in `lua list` chatter is undesirable, `//am verify off` suppresses automatic audits only.
+8. Regression check `//am all reload trust` on two same-PC clients and existing saved profile management. No IPC logic was changed in this batch.
+
+### Verification and safeguards
+
+- [ ] Actual in-game Logger fallback and complete Cioara audit verified.
+- [ ] No historical Logger snapshot treated as a fresh audit.
+- [ ] Live imports retain preview-confirm flow and respect global subtraction.
+- [ ] The `incoming text` capture remains available even when Logger isn't running.
+- [ ] No addon loads, unloads, or profile saves caused by `//am audit`.
+- [ ] Cross-client operations and startup remain unchanged.
+
+**Static/mock tests:** GitHub Actions runs Lua 5.1 syntax checks, existing mock Windower profile management, three-client IPC simulation, and a Logger-only mock where event capture receives nothing. The new mock verifies a fresh Logger audit, safe import preview, stale list rejection, empty-heading rejection and no extra load commands. These tests do **not** substitute for FFXI/Windower behavior.
+
+**Delivery register:** Fix source and test revisions `44feb069`, `11e0af90`, `55ff9238`; full branch history identifies the final package revision. Preserve the previous known-good development branch `dev/addonmanager-v0.5` for rollback.
+
+---
+
+# PREVIOUS TESTING — AddonManager
+
 **Development branch:** `dev/addonmanager-v0.5`
 **Version:** 0.5.0-dev.1
 **Date:** 2026-10-20
