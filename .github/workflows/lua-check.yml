@@ -21,8 +21,7 @@ jobs:
       - name: Assemble installable testing ZIP
         run: |
           mkdir -p package/AddonManager
-          cp AddonManager.lua README.md package/AddonManager/
-          cp WORKFLOW.md TESTING.md package/
+          cp AddonManager.lua am_cluster.lua README.md WORKFLOW.md TESTING.md package/AddonManager/
           (cd package && zip -r ../AddonManager-testing-batch.zip .)
       - name: Upload testing package
         uses: actions/upload-artifact@v4
