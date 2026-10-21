@@ -4,10 +4,11 @@
 -- No code copied from the original plugin_manager; see README for historical inspiration.
 _addon.name = 'AddonManager'
 _addon.author = 'Max and A'
-_addon.version = '0.5.0-dev.3'
+_addon.version = '0.5.0-dev.4'
 _addon.commands = {'am'}
 
 require('chat')
+local console_capture = require('am_console')
 
 local root = windower.addon_path
 local data_dir = root .. 'data/'
@@ -19,6 +20,7 @@ local pending_prune = nil -- Previewed duplicate cleanup; never writes without c
 local running_capture = nil -- Only the current client's most recent live lua-list request.
 local startup_enabled = true
 local verify_enabled = true -- Report startup discrepancies; never auto-repair.
+local capture_mode = 'console' -- Quiet native console; chat remains a fallback option.
 local delay_seconds = 1
 local current_character = nil
 local requested = {} -- This is intent, NOT a confirmed list of loaded addons.
@@ -291,6 +293,7 @@ local function print_help()
         {'//am delay [seconds]', 'Show or set stagger interval (0..10)'},
         {'//am startup on|off', 'Automatic profile load after login'},
         {'//am audit', 'Read-only check against lua list'},
+        {'//am capture [console|chat]', 'Select audit output (default console)'},
         {'//am verify on|off', 'Startup audit and discrepancy alerts'},
         {'//am status', 'Current character, profiles, queue info'},
         {'//am restart', 'Reload the profile manager'},
@@ -473,8 +476,15 @@ end
 
 local function finish_loaded_capture(capture)
     if running_capture ~= capture then return end
-    local logger_reason
-    if not capture.started or #capture.lines == 0 then
+    local logger_reason, console_reason
+    if capture.mode == 'console' then
+        local entries
+        entries, console_reason = console_capture.finish(capture.console)
+        if entries then
+            capture.started, capture.lines = true, entries
+            capture.snapshot_source = 'console.log marker bounded'
+        end
+    elseif not capture.started or #capture.lines == 0 then
         local recovered
         recovered, logger_reason = logger_fallback(capture)
         if recovered then
@@ -485,8 +495,13 @@ local function finish_loaded_capture(capture)
     if not capture.started or #capture.lines == 0 then
         local live_reason = capture.started and 'heading detected, no entries' or
             'list heading not received'
-        local detail = 'incoming text: ' .. live_reason ..
-            '; Logger: ' .. (logger_reason or 'not available')
+        local detail
+        if capture.mode == 'console' then
+            detail = 'console.log: ' .. (console_reason or 'unavailable')
+        else
+            detail = 'incoming text: ' .. live_reason ..
+                '; Logger: ' .. (logger_reason or 'not available')
+        end
         if capture.kind == 'audit' then
             msg('Audit inconclusive (' .. detail .. '). No changes made.', 123)
             if capture.done then capture.done(false) end
@@ -540,20 +555,45 @@ local function finish_loaded_capture(capture)
     msg('Snapshot from this client only. No changes yet. //am import confirm|cancel')
 end
 
+-- Audit/import queries share a single capture pipeline. Console mode never
+-- touches console_log; if another addon (e.g. ConsoleBGPlus) has not enabled
+-- it, fail closed. Chat mode retains the proven Logger-file fallback.
+local function issue_loaded_list(capture)
+    capture.mode = capture_mode
+    if capture.mode == 'console' then
+        local snapshot, err = console_capture.begin(windower.windower_path, current_profile())
+        if not snapshot then
+            msg('Quiet audit unavailable: ' .. tostring(err) ..
+                '. No load requests issued.', 123)
+            if capture.done then capture.done(false) end
+            return false
+        end
+        capture.console = snapshot
+    else
+        capture.logger = logger_watermark()
+    end
+    running_capture = capture
+    if capture.mode == 'console' then
+        for _, cmd in ipairs(console_capture.commands(capture.console)) do
+            windower.send_command(cmd)
+        end
+    else
+        windower.send_command('lua list')
+    end
+    coroutine.schedule(function()
+        coroutine.sleep(2)
+        finish_loaded_capture(capture)
+    end, 0)
+    return true
+end
+
 local function begin_loaded_capture(target)
     if not target then msg('Specify a character or log in first.', 123); return end
     if running_capture then msg('A lua-list capture is in progress. Try again shortly.', 123); return end
     pending_import = nil
     pending_prune = nil
-    local capture = {target = target, started = false, finished = false,
-        lines = {}, logger = logger_watermark()}
-    running_capture = capture
-    msg('Requesting //lua list and capturing this client...')
-    windower.send_command('lua list')
-    coroutine.schedule(function()
-        coroutine.sleep(2)
-        finish_loaded_capture(capture)
-    end, 0)
+    msg('Requesting current-client addon list (' .. capture_mode .. ')...')
+    issue_loaded_list({target = target, started = false, finished = false, lines = {}})
 end
 
 begin_audit = function(source, done)
@@ -568,60 +608,11 @@ begin_audit = function(source, done)
         if done then done(false) end
         return false
     end
-    local capture = {kind = 'audit', source = source, character = who,
-        started = false, finished = false, lines = {}, done = done,
-        logger = logger_watermark()}
-    running_capture = capture
     if source == 'manual' then
-        msg('Auditing this client against global + ' .. who ..
-            '. Windower may display lua list output.')
+        msg('Auditing global + ' .. who .. ' using ' .. capture_mode .. ' output.')
     end
-    windower.send_command('lua list')
-    coroutine.schedule(function()
-        coroutine.sleep(2)
-        finish_loaded_capture(capture)
-    end, 0)
-end
-
--- A live addon reload is NOT a character login. Before issuing any saved
--- profile loads, inspect the running client. Failure is deliberately fail-closed.
-local function reconcile_on_reload()
-    local who = current_profile()
-    if not who or not startup_enabled then return end
-    generation = generation + 1
-    local token = generation
-    coroutine.schedule(function()
-        -- Let LuaCore finish addon load and Logger establish its log file.
-        coroutine.sleep(0.5)
-        if generation ~= token or current_profile() ~= who then return end
-        msg('Safe reload: auditing global + ' .. who .. ' before any load requests.')
-        begin_audit('reload', function(ok, missing)
-            if generation ~= token or current_profile() ~= who then return end
-            if not ok then
-                msg('Safe reload: no addons loaded because verification was inconclusive. '
-                    .. 'Use //am audit or //am apply to load manually.', 123)
-                return
-            end
-            if #missing == 0 then
-                msg('Safe reload: all configured addons already running. Nothing to load.')
-                return
-            end
-            local list = missing
-            msg(('Safe reload: %d addon(s) missing; only those will be requested.'):format(#list))
-            local after
-            if verify_enabled then
-                after = function()
-                    coroutine.schedule(function()
-                        coroutine.sleep(3)
-                        if current_profile() == who and verify_enabled then
-                            begin_audit('startup')
-                        end
-                    end, 0)
-                end
-            end
-            command_items('load', list, 'Safe reload: missing for ' .. who, 0, after)
-        end)
-    end, 0)
+    return issue_loaded_list({kind = 'audit', source = source, character = who,
+        started = false, finished = false, lines = {}, done = done})
 end
 
 windower.register_event('incoming text', function(_, message, _, _, blocked)
@@ -747,6 +738,9 @@ local function read_options()
             startup_enabled = trim(value) ~= 'off'
         elseif key == 'verify' then
             verify_enabled = trim(value) ~= 'off'
+        elseif key == 'capture' then
+            local mode = trim(value):lower()
+            if mode == 'chat' or mode == 'console' then capture_mode = mode end
         elseif key == 'stagger' and cluster then
             cluster.gap(trim(value))
         end
@@ -760,6 +754,7 @@ local function save_options()
     f:write('startup=', startup_enabled and 'on' or 'off', '\n')
     f:write('delay=', tostring(delay_seconds), '\n')
     f:write('verify=', verify_enabled and 'on' or 'off', '\n')
+    f:write('capture=', capture_mode, '\n')
     f:write('stagger=', tostring(cluster.gap()), '\n')
     f:close()
     return true
@@ -828,6 +823,16 @@ local function dispatch(...)
         if args[2] and n then save_options() end
     elseif verb == 'audit' then
         begin_audit('manual')
+    elseif verb == 'capture' then
+        local choice = args[2] and args[2]:lower()
+        if not choice then
+            msg('Loaded list output: ' .. capture_mode .. ' (//am capture console|chat)')
+        elseif choice ~= 'console' and choice ~= 'chat' then
+            msg('Use //am capture console|chat.', 123)
+        else
+            capture_mode = choice
+            if save_options() then msg('List capture source: ' .. capture_mode) end
+        end
     elseif verb == 'verify' then
         if args[2] ~= 'on' and args[2] ~= 'off' then
             msg('Startup verification: ' .. (verify_enabled and 'on' or 'off') ..
@@ -862,7 +867,8 @@ local function dispatch(...)
         msg('v' .. _addon.version .. ' | character: ' .. who ..
             ' | startup: ' .. (startup_enabled and 'on' or 'off') ..
             ' | spacing: ' .. tostring(delay_seconds) .. 's' ..
-            ' | verify: ' .. (verify_enabled and 'on' or 'off')) 
+            ' | verify: ' .. (verify_enabled and 'on' or 'off') ..
+            ' | capture: ' .. capture_mode) 
         cluster.status()
         msg('Global: ' .. #read_profile('global') .. ' | character: ' ..
             (who ~= '(character not logged in)' and
