@@ -5,6 +5,7 @@ local who = 'Myrr'
 local simulate_list = true
 local reload_list = nil -- Override simulated lua list for safe-reload tests
 local logger_emulation = 'off' -- Simulated Logger disk output, distinct from incoming text
+local console_emulation = false -- Simulate native console.log independently of chat
 
 package.preload['chat'] = function()
     string.color = function(self) return self end
@@ -23,6 +24,16 @@ windower = {
     add_to_chat = function(_, text) chats[#chats + 1] = text end,
     send_command = function(command)
         commands[#commands + 1] = command
+        if console_emulation then
+            local log = assert(io.open('tmp_windower/console.log', 'a'))
+            if command:find('^console_echo ') then
+                log:write(command:match('^console_echo "([^"]+)"') or 'bad_marker', '\n')
+            elseif command == 'lua list console' then
+                log:write('Currently loaded addons:\n  Equipviewer\n  EnemyBar2\n',
+                    '  AddonManager\n')
+            end
+            log:close()
+        end
         if command == 'lua list' and logger_emulation ~= 'off' then
             local name = who:sub(1, 1):upper() .. who:sub(2):lower()
             local path = 'tmp_windower/logs/' .. name .. '_' .. os.date('%Y.%m.%d') .. '.log'
@@ -89,6 +100,9 @@ local function count_command(needle)
 end
 
 os.execute('mkdir -p tmp_am/data/profiles tmp_windower/scripts tmp_windower/logs tmp_windower/addons/plugin_manager/data')
+local settings_file = assert(io.open('tmp_am/data/options.txt', 'w'))
+settings_file:write('startup=on\ndelay=1\nverify=on\ncapture=chat\n')
+settings_file:close()
 dofile('AddonManager.lua')
 assert(type(events.load) == 'function', 'load event not registered')
 assert(type(events.login) == 'function', 'login event not registered')
@@ -294,6 +308,39 @@ assert(count_command('lua load enemybar2') == prior + 1,
     'actual login did not automatically load character profile')
 local global_before = count_command('lua load equipviewer')
 assert(global_before >= 1, 'global profile not loaded')
+-- New console-first mode: a real marker-bounded native-console snapshot.
+-- It must avoid the in-game "lua list" command and exclude running addons.
+file('tmp_windower/console.log', 'Unrelated prior console output\n')
+console_emulation = true
+am('capture', 'console')
+assert(contents('tmp_am/data/options.txt'):find('capture=console', 1, true),
+    'console capture preference not persisted')
+local chat_list_before = count_command('lua list')
+local console_list_before = count_command('lua list console')
+local running_equip_before = count_command('lua load equipviewer')
+local running_enemy_before = count_command('lua load enemybar2')
+events.load()
+assert(count_command('lua list') == chat_list_before,
+    'console mode unexpectedly dumped the list into game chat')
+assert(count_command('lua list console') == console_list_before + 1,
+    'quiet console list was not requested')
+assert(count_command('lua load equipviewer') == running_equip_before,
+    'console snapshot reloaded already running equipviewer')
+assert(count_command('lua load enemybar2') == running_enemy_before,
+    'console snapshot reloaded already running enemybar2')
+-- Console log failure must fail closed instead of reverting to chat implicitly.
+console_emulation = false
+local console_raw = contents('tmp_windower/console.log')
+local before_failed_console = #commands
+events.load()
+assert(#commands == before_failed_console + 3,
+    'console preflight should emit only the marker/list/marker commands')
+assert(count_command('lua load equipviewer') == running_equip_before,
+    'no fresh console capture must not issue load requests')
+console_emulation = true
+am('capture', 'chat')
+assert(contents('tmp_am/data/options.txt'):find('capture=chat', 1, true),
+    'chat fallback preference not persisted')
 am('unload', 'manager')
 assert(count_command('lua unload AddonManager') >= 1, 'explicit manager unload missing')
 print('AddonManager mock smoke test: PASS (' .. #commands .. ' Windower commands)')
