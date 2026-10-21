@@ -150,6 +150,30 @@ assert(not cleaned:find('equipviewer', 1, true), 'prune kept globally-covered ad
 assert(cleaned:find('battlestations', 1, true), 'prune lost character-specific addon')
 am('prune', 'Cioara')
 am('prune', 'cancel')
+-- A manual audit must be read-only and report missing addons only from the
+-- expected global+character profiles. It must not auto-load missing addons.
+local audit_before = contents('tmp_am/data/profiles/cioara.txt')
+local commands_before_audit = #commands
+am('audit')
+assert(contents('tmp_am/data/profiles/cioara.txt') == audit_before,
+    'audit modified a saved profile')
+assert(#commands == commands_before_audit + 1 and commands[#commands] == 'lua list',
+    'audit dispatched unexpected load commands')
+local found_missing = false
+for _, chat in ipairs(chats) do
+    if chat:find('Missing: enemybar2', 1, true) then found_missing = true end
+end
+-- Current player is Myrr: audit correctly uses Myrr's profile, not Cioara's.
+assert(not found_missing, 'audit checked a different character profile')
+am('verify', 'off')
+assert(contents('tmp_am/data/options.txt'):find('verify=off', 1, true),
+    'startup audit option did not persist')
+am('verify', 'on')
+assert(contents('tmp_am/data/options.txt'):find('verify=on', 1, true),
+    'startup audit reenable did not persist')
+local commands_before_bare = #commands
+am('all', 'reload')
+assert(#commands == commands_before_bare, 'bare all reload issued an unsafe command')
 simulate_list = false
 am('import', 'loaded', 'Myrr')
 am('import', 'confirm')
