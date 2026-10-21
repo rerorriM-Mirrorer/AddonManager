@@ -38,7 +38,9 @@
 - An audit run overlapping a manual import is skipped rather than destroying an import preview. No retries, no automatic unloading, no enforcement of unmanaged addons.
 - Historical v0.4 note that the repository was named AddonToggle was accurate at its original writing; the repository was subsequently renamed **AddonManager** by the user.
 
-**Development register:** Core IPC coordinator commit `e0912775`, main addon/audit integration `d3ef2cc9`, multi-client simulated test `e5992d84`. CI and corrective commits are included in branch history. Build ZIP must correspond to final branch commit; inspect GitHub Actions before delivering. No actual FFXI tests have been performed for this version.
+**Automated result:** PASS on GitHub Actions [Lua 5.1 checks, run 39542894885](https://github.com/rerorriM-Mirrorer/AddonManager/actions/runs/39542894885), commit `fc1e73675c2edc49836c8949b126e4379199be31`: syntax validation of both addon modules and both test programs; existing mocked Windower smoke test; and three-client simulated IPC discovery, two-second dispatch spacing, initiator-last, reload, opt-out, peer refusal, cancellation and duplicate packet handling. These are **static/simulated tests only**, not actual FFXI tests.
+
+**Development register:** Core IPC coordinator commit `e0912775`, main addon/audit integration `d3ef2cc9`, multi-client simulated test `e5992d84`. CI and corrective commits are included in branch history. Build ZIP must correspond to final branch commit and final green GitHub Actions run; use the artifact from that run. No actual FFXI tests have been performed for this version.
 
 ---
 
