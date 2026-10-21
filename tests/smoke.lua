@@ -3,6 +3,7 @@ _addon = {}
 local events, commands, chats = {}, {}, {}
 local who = 'Myrr'
 local simulate_list = true
+local logger_emulation = 'off' -- Simulated Logger disk output, distinct from incoming text
 
 package.preload['chat'] = function()
     string.color = function(self) return self end
@@ -21,6 +22,18 @@ windower = {
     add_to_chat = function(_, text) chats[#chats + 1] = text end,
     send_command = function(command)
         commands[#commands + 1] = command
+        if command == 'lua list' and logger_emulation ~= 'off' then
+            local name = who:sub(1, 1):upper() .. who:sub(2):lower()
+            local path = 'tmp_windower/logs/' .. name .. '_' .. os.date('%Y.%m.%d') .. '.log'
+            local file = assert(io.open(path, 'a'))
+            if logger_emulation == 'full' then
+                file:write('Currently loaded addons:\\n  Equipviewer\\n  Battle Stations\\n',
+                    '  Job Change\\n  Logger\\n  AddonManager\\n')
+            elseif logger_emulation == 'header' then
+                file:write('Currently loaded addons:\\n')
+            end
+            file:close()
+        end
         if command == 'lua list' and simulate_list then
             local lines = {
                 'Currently loaded addons:',
@@ -74,7 +87,7 @@ local function count_command(needle)
     return n
 end
 
-os.execute('mkdir -p tmp_am/data/profiles tmp_windower/scripts tmp_windower/addons/plugin_manager/data')
+os.execute('mkdir -p tmp_am/data/profiles tmp_windower/scripts tmp_windower/logs tmp_windower/addons/plugin_manager/data')
 dofile('AddonManager.lua')
 assert(type(events.load) == 'function', 'load event not registered')
 assert(type(events.login) == 'function', 'login event not registered')
@@ -174,7 +187,52 @@ assert(contents('tmp_am/data/options.txt'):find('verify=on', 1, true),
 local commands_before_bare = #commands
 am('all', 'reload')
 assert(#commands == commands_before_bare, 'bare all reload issued an unsafe command')
+-- Real-world regression: the in-game Logger writes complete lua-list output,
+-- but AddonManager's own incoming-text capture sees none.
 simulate_list = false
+local log_path = 'tmp_windower/logs/Myrr_' .. os.date('%Y.%m.%d') .. '.log'
+file(log_path, 'Currently loaded addons:\\n  Equipviewer\\n')
+local before_stale = #chats
+am('audit') -- Logger exists, but no NEW bytes were written for this request.
+local stale_recovered = false
+local stale_inconclusive = false
+for i = before_stale + 1, #chats do
+    if chats[i]:find('Recovered', 1, true) then stale_recovered = true end
+    if chats[i]:find('inconclusive', 1, true) then stale_inconclusive = true end
+end
+assert(stale_inconclusive and not stale_recovered, 'stale Logger list accepted as fresh')
+
+logger_emulation = 'full'
+local before_logger = #chats
+local before_logger_commands = #commands
+am('audit')
+local recovered, audit_ok = false, false
+for i = before_logger + 1, #chats do
+    if chats[i]:find('Recovered 5 addon names', 1, true) then recovered = true end
+    if chats[i]:find('Audit myrr:', 1, true) then audit_ok = true end
+end
+assert(recovered and audit_ok, 'fresh Logger output did not recover audit')
+assert(#commands == before_logger_commands + 1 and commands[#commands] == 'lua list',
+    'Logger audit issued unsafe commands')
+
+-- Logger fallback must support import too, without saving before confirmation.
+local prior_global = contents('tmp_am/data/profiles/global.txt')
+am('import', 'loaded', 'Myrr')
+assert(contents('tmp_am/data/profiles/myrr.txt') == '', 'Logger preview saved early')
+assert(contents('tmp_am/data/profiles/global.txt') == prior_global,
+    'Logger import changed global unexpectedly')
+am('import', 'cancel')
+
+-- A header without rows is never treated as a valid snapshot.
+logger_emulation = 'header'
+local before_empty = #chats
+am('audit')
+local empty_failed = false
+for i = before_empty + 1, #chats do
+    if chats[i]:find('inconclusive', 1, true) then empty_failed = true end
+end
+assert(empty_failed, 'empty Logger snapshot incorrectly marked complete')
+logger_emulation = 'off'
 am('import', 'loaded', 'Myrr')
 am('import', 'confirm')
 assert(contents('tmp_am/data/profiles/myrr.txt') == '',
