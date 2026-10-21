@@ -1,5 +1,49 @@
 # TESTING — AddonManager
 
+**Branch:** `dev/addonmanager-v0.5-safe-reload`
+**Version:** 0.5.0-dev.3
+**Date:** 2026-10-21
+**Status:** Automated Lua 5.1 syntax and simulated behavior checks passed on the development branch. **Safe reload and Logger fallback have not been verified in live FFXI.** The previous branches are preserved.
+
+## Batch 5c — Audit before addon reload; load only missing addons
+
+**User request:** Reloading AddonManager while already playing should avoid issuing 30+ redundant `lua load` requests. It should automatically inspect the client's currently loaded addons, compare them with the saved global and character profiles, and load only entries genuinely absent. The user also asked how Logger gets its text and whether AddonManager can use Logger's stream for verification.
+
+**Source verification:** The official Windower Logger addon listens to `windower.register_event('incoming text', ...)`, strips color codes and saves messages to dated `Windower/logs/<Character>_YYYY.MM.DD.log`. AddonManager already registers the same event, but the user's Cioara live evidence showed Logger receiving full `lua list` entries while AM's own audit saw none. Batch 5b added an optional fresh-file fallback (watermark before query). This batch retains that fallback; it does not copy Logger into the addon or create an unsupported API.
+
+**Behavioral change:**
+- When AddonManager's `load` event runs **while a character is already logged in**, and `//am startup on`, it waits 0.5 seconds, audits current-client runtime addons, and **does not queue normal startup profile loads before the audit**.
+- Only a captured, mappable list **including `AddonManager` itself and no unresolved display names** is eligible to authorize automatic loads. Matched expected addons are omitted from the queue; only missing items are queued, at the existing `//am delay` interval.
+- On a failed/incomplete capture, folder scan error, or concurrent capture, automatic reload performs **zero profile load requests**, reports a reason, and leaves installed/loaded addons alone. **No retry.**
+- After missing-load dispatches, `//am verify on` optionally performs the existing post-queue read-only audit. `//am verify off` suppresses only this *additional* audit; it does **not** bypass safe reload preflight.
+- Actual **new character login** event continues the existing delayed profile queue, unchanged. `//am apply` remains the explicit **unfiltered** way to load the full combined profile, should the player choose to do so.
+- Profiles/settings are not edited during a reload audit. Logout/unload/generation invalidation prevents continuing obsolete operations.
+- Same-computer IPC coordinator `//am all load|reload` is unchanged.
+
+### Install + in-game tests (pending)
+
+1. Back up `Windower/addons/AddonManager/`, especially `data/profiles/` and `data/options.txt`. Extract the complete replacement addon folder containing `AddonManager.lua`, `am_cluster.lua`, `README.md`, `WORKFLOW.md`, `TESTING.md`; **do not replace the existing `data/` directory.**
+2. On an already-playing Cioara with Logger running, run `//lua reload AddonManager`. Expect `Safe reload: auditing...`, an audit summary (or Logger recovery notice), then **no load requests** if all configured addons are running. Confirm no duplicate-load errors.
+3. Deliberately unload one noncritical addon that exists in the profile, then reload AddonManager again. Expect **only that addon** to receive `lua load`. Verify visually/in `lua list`.
+4. With all entries already running, reload AddonManager again. Expect a successful audit and **zero load requests**.
+5. Reproduce failed capture safely by unloading Logger (where AM's own live-event capture is also known to fail). Reload AM; it must say verification was inconclusive and **issue no load requests**. Restore Logger manually.
+6. Try `//am verify off` then `//lua reload AddonManager`: the safety preflight must still run, but no additional post-queue audit follows. Restore `//am verify on` as desired.
+7. Test actual logout/login or character selection separately. Fresh login retains the previous three-second-delayed profile queue; do not assume the reload tests establish fresh-login success.
+8. Confirm `//am audit` and `//am import loaded` still produce read-only output and preview-first imports, and the cross-client `//am all reload trust` command remains unaffected.
+9. On an inconclusive safe reload, use `//am apply` *only if you deliberately want the old unfiltered load behavior*. It is not an automatic fallback.
+
+### Automated checks and remaining limits
+
+GitHub Actions checks both addon Lua files and smoke programs with Lua 5.1, executes the baseline simulated profile-manager tests, the new reload tests (one missing, all present, incomplete/missing capture), Logger-only recovered reload, and the three-client IPC simulation. A passing test is **not equivalent to actual FFXI testing**.
+
+**Caution:** Requiring an `AddonManager` entry and zero unmatched display names is a conservative *completeness guard*, not cryptographic proof that Windower emitted every addon. No documented silent `lua list` argument is used. Future versions could add a robust authoritative registry query if one becomes available.
+
+**Delivery register:** Core safe reload `922f9999`; simulated tests `a024cd7c` and Logger-only scenario `ea221953`; documentation and final packaging commits tracked on this branch. No modifications to the previously tested dev.1/2 branches or to `main`. Final downloadable ZIP must correspond to the final passing GitHub Actions commit and retain all required package documents.
+
+---
+
+# PREVIOUS TESTING — AddonManager
+
 **Development branch:** `dev/addonmanager-v0.5-logger-audit`
 **Version:** 0.5.0-dev.2
 **Date:** 2026-10-21
