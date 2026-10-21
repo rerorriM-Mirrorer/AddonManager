@@ -615,6 +615,47 @@ begin_audit = function(source, done)
         started = false, finished = false, lines = {}, done = done})
 end
 
+-- A live addon reload is NOT a character login. Before issuing any saved
+-- profile loads, inspect the running client. Failure is deliberately fail-closed.
+local function reconcile_on_reload()
+    local who = current_profile()
+    if not who or not startup_enabled then return end
+    generation = generation + 1
+    local token = generation
+    coroutine.schedule(function()
+        -- Let LuaCore finish addon load and Logger establish its log file.
+        coroutine.sleep(0.5)
+        if generation ~= token or current_profile() ~= who then return end
+        msg('Safe reload: auditing global + ' .. who .. ' before any load requests.')
+        begin_audit('reload', function(ok, missing)
+            if generation ~= token or current_profile() ~= who then return end
+            if not ok then
+                msg('Safe reload: no addons loaded because verification was inconclusive. '
+                    .. 'Use //am audit or //am apply to load manually.', 123)
+                return
+            end
+            if #missing == 0 then
+                msg('Safe reload: all configured addons already running. Nothing to load.')
+                return
+            end
+            local list = missing
+            msg(('Safe reload: %d addon(s) missing; only those will be requested.'):format(#list))
+            local after
+            if verify_enabled then
+                after = function()
+                    coroutine.schedule(function()
+                        coroutine.sleep(3)
+                        if current_profile() == who and verify_enabled then
+                            begin_audit('startup')
+                        end
+                    end, 0)
+                end
+            end
+            command_items('load', list, 'Safe reload: missing for ' .. who, 0, after)
+        end)
+    end, 0)
+end
+
 windower.register_event('incoming text', function(_, message, _, _, blocked)
     if not blocked then capture_line(message) end
 end)
