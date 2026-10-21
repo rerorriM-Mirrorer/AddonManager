@@ -4,7 +4,7 @@
 -- No code copied from the original plugin_manager; see README for historical inspiration.
 _addon.name = 'AddonManager'
 _addon.author = 'Max and A'
-_addon.version = '0.4.0-dev.2'
+_addon.version = '0.5.0-dev.1'
 _addon.commands = {'am'}
 
 require('chat')
@@ -18,9 +18,12 @@ local pending_import = nil
 local pending_prune = nil -- Previewed duplicate cleanup; never writes without confirmation.
 local running_capture = nil -- Only the current client's most recent live lua-list request.
 local startup_enabled = true
+local verify_enabled = true -- Report startup discrepancies; never auto-repair.
 local delay_seconds = 1
 local current_character = nil
 local requested = {} -- This is intent, NOT a confirmed list of loaded addons.
+local begin_audit -- Assigned below; startup queue callback uses it after source initialization.
+local cluster
 
 local function msg(s, color)
     windower.add_to_chat(0, ('[AM] '):color(167) .. tostring(s):color(color or 207))
@@ -205,10 +208,14 @@ local function edit_profile(verb, profile, addon)
     end
 end
 
-local function command_items(kind, list, label, start_after)
+local function command_items(kind, list, label, start_after, after)
     generation = generation + 1
     local token = generation
-    if #list == 0 then msg(label .. ': no addons to ' .. kind); return end
+    if #list == 0 then
+        msg(label .. ': no addons to ' .. kind)
+        if after then after() end
+        return
+    end
     msg(('%s: queued %d %s request(s), %.1fs spacing'):format(
         label, #list, kind, delay_seconds))
     -- Scan only once per batch to avoid expensive repeated directory reads.
@@ -238,14 +245,26 @@ local function command_items(kind, list, label, start_after)
             if i < #list then coroutine.sleep(delay_seconds) end
         end
         msg(label .. ': requests dispatched (completion not verified)')
+        if after then after() end
     end, 0)
 end
 
-local function apply_current(start_after)
+local function apply_current(start_after, check_on_startup)
     local who = current_profile()
     if not who then msg('No character logged in; //am apply requires a character.', 123); return end
     local list = combine(read_profile('global'), read_profile(who))
-    command_items('load', list, 'global + ' .. who, start_after)
+    local after
+    if check_on_startup and verify_enabled then
+        -- Allow time for the final dispatched addon to finish initializing.
+        -- This is a delay, NOT proof of addon readiness.
+        after = function()
+            coroutine.schedule(function()
+                coroutine.sleep(3)
+                if who == current_profile() and verify_enabled then begin_audit('startup') end
+            end, 0)
+        end
+    end
+    command_items('load', list, 'global + ' .. who, start_after, after)
 end
 
 local function print_help()
@@ -257,6 +276,10 @@ local function print_help()
         {'//am load [global|character]', 'Load a saved list in this client'},
         {'//am unload [global|character|all]', 'Unload listed addons only'},
         {'//am apply', 'Load global + current character'},
+        {'//am all load <addon>', 'Stagger load across same-PC clients'},
+        {'//am all reload <addon>', 'Stagger reload across same-PC clients'},
+        {'//am all cancel', 'Cancel a pending client batch'},
+        {'//am stagger [seconds]', 'Cross-client spacing (default 2s)'},
         {'//am scan [all]', 'Discover installed Lua addons'},
         {'//am import loaded [profile]', 'Capture extras beyond global (or full global)'},
         {'//am import init [profile]', 'Preview imports from scripts/init.txt'},
@@ -267,6 +290,8 @@ local function print_help()
         {'//am prune confirm|cancel', 'Save cleanup or discard preview'},
         {'//am delay [seconds]', 'Show or set stagger interval (0..10)'},
         {'//am startup on|off', 'Automatic profile load after login'},
+        {'//am audit', 'Read-only check against lua list'},
+        {'//am verify on|off', 'Startup audit and discrepancy alerts'},
         {'//am status', 'Current character, profiles, queue info'},
         {'//am restart', 'Reload the profile manager'},
         {'//am unload manager', 'Unload the profile manager itself'},
@@ -354,13 +379,58 @@ local function capture_line(value)
     end
 end
 
+local function finish_audit(capture)
+    local installed, ok = installed_lookup()
+    if not ok then msg('Audit unavailable: addon folder inventory failed.', 123); return end
+    if capture.character ~= current_profile() then return end
+    local index = installed_display_index(installed)
+    local observed, unresolved = {}, {}
+    for _, display in ipairs(capture.lines) do
+        local addon = index[canonical_key(display)]
+        if addon then observed[addon] = true
+        else unresolved[#unresolved + 1] = display end
+    end
+    local expected = combine(read_profile('global'), read_profile(capture.character))
+    local missing, unlisted, matched = {}, {}, 0
+    local planned = {}
+    for _, addon in ipairs(expected) do
+        planned[addon] = true
+        if observed[addon] then matched = matched + 1
+        else missing[#missing + 1] = addon end
+    end
+    for addon in pairs(observed) do
+        if not planned[addon] and addon ~= 'addonmanager' and
+            addon ~= 'addontoggle' and addon ~= 'plugin_manager' then
+            unlisted[#unlisted + 1] = addon
+        end
+    end
+    table.sort(unlisted)
+    local head = ('Audit %s: %d/%d expected loaded; %d missing; %d unmanaged; %d unresolved'):format(
+        capture.character, matched, #expected, #missing, #unlisted, #unresolved)
+    -- Windower-native addons managed outside profiles count as unmanaged, not errors.
+    msg(head, #missing > 0 and 123 or 207)
+    for _, addon in ipairs(missing) do msg('  Missing: ' .. addon, 123) end
+    if #unresolved > 0 then
+        msg('  ' .. #unresolved .. ' display name(s) could not be matched; results may be incomplete.', 123)
+    end
+    if capture.source == 'manual' then
+        for _, addon in ipairs(unlisted) do msg('  Unmanaged: ' .. addon, 0) end
+    end
+    -- A snapshot can reveal missing addons but never proves a load command succeeded.
+end
+
 local function finish_loaded_capture(capture)
     if running_capture ~= capture then return end
     running_capture = nil
     if not capture.started or #capture.lines == 0 then
-        msg('Could not capture //lua list. No import prepared; //am import file remains available.', 123)
+        if capture.kind == 'audit' then
+            msg('Audit inconclusive: lua list produced no captured entries (nothing assumed missing).', 123)
+        else
+            msg('Could not capture //lua list. No import prepared; //am import file remains available.', 123)
+        end
         return
     end
+    if capture.kind == 'audit' then finish_audit(capture); return end
 
     local installed, ok = installed_lookup()
     if not ok then
@@ -403,11 +473,33 @@ end
 
 local function begin_loaded_capture(target)
     if not target then msg('Specify a character or log in first.', 123); return end
+    if running_capture then msg('A lua-list capture is in progress. Try again shortly.', 123); return end
     pending_import = nil
     pending_prune = nil
     local capture = {target = target, started = false, finished = false, lines = {}}
     running_capture = capture
     msg('Requesting //lua list and capturing this client...')
+    windower.send_command('lua list')
+    coroutine.schedule(function()
+        coroutine.sleep(2)
+        finish_loaded_capture(capture)
+    end, 0)
+end
+
+begin_audit = function(source)
+    local who = current_profile()
+    if not who then msg('Audit needs a logged-in character.', 123); return end
+    if running_capture then
+        msg('Audit skipped: a lua-list capture is already running.', 123)
+        return
+    end
+    local capture = {kind = 'audit', source = source, character = who,
+        started = false, finished = false, lines = {}}
+    running_capture = capture
+    if source == 'manual' then
+        msg('Auditing this client against global + ' .. who ..
+            '. Windower may display lua list output.')
+    end
     windower.send_command('lua list')
     coroutine.schedule(function()
         coroutine.sleep(2)
@@ -536,6 +628,10 @@ local function read_options()
             if n and n >= 0 and n <= 10 then delay_seconds = n end
         elseif key == 'startup' then
             startup_enabled = trim(value) ~= 'off'
+        elseif key == 'verify' then
+            verify_enabled = trim(value) ~= 'off'
+        elseif key == 'stagger' and cluster then
+            cluster.gap(trim(value))
         end
     end
 end
@@ -546,9 +642,36 @@ local function save_options()
     if not f then msg('Cannot save options: ' .. tostring(err), 123); return false end
     f:write('startup=', startup_enabled and 'on' or 'off', '\n')
     f:write('delay=', tostring(delay_seconds), '\n')
+    f:write('verify=', verify_enabled and 'on' or 'off', '\n')
+    f:write('stagger=', tostring(cluster.gap()), '\n')
     f:close()
     return true
 end
+
+cluster = require('am_cluster')({
+    message = msg,
+    check = function(addon)
+        if not valid_name(addon) or addon == 'addonmanager' or addon == 'addontoggle' or
+            addon == 'plugin_manager' then
+            return false, 'Invalid or protected addon name: ' .. tostring(addon)
+        end
+        local installed, scanned = is_installed(addon)
+        if not scanned then return false, 'Cannot validate installed addon folders.' end
+        if not installed then return false, 'Addon not installed: ' .. addon end
+        return true
+    end,
+    run = function(action, addon)
+        if action ~= 'load' and action ~= 'reload' then return false, 'Invalid action.' end
+        if not valid_name(addon) or addon == 'addonmanager' or addon == 'addontoggle' or
+            addon == 'plugin_manager' then return false, 'Protected addon.' end
+        local installed, scanned = is_installed(addon)
+        if not scanned or not installed then return false, 'Missing addon: ' .. addon end
+        local ok, err = pcall(windower.send_command, 'lua ' .. action .. ' ' .. addon)
+        if not ok then return false, tostring(err) end
+        requested[addon] = action .. ' requested (unverified)'
+        return true
+    end,
+})
 
 local function dispatch(...)
     local args = {...}
@@ -581,6 +704,21 @@ local function dispatch(...)
         end
     elseif verb == 'apply' then
         apply_current()
+    elseif verb == 'all' then
+        cluster.handle(args[2], args[3], args[4])
+    elseif verb == 'stagger' then
+        local n = cluster.gap(args[2])
+        if args[2] and n then save_options() end
+    elseif verb == 'audit' then
+        begin_audit('manual')
+    elseif verb == 'verify' then
+        if args[2] ~= 'on' and args[2] ~= 'off' then
+            msg('Startup verification: ' .. (verify_enabled and 'on' or 'off') ..
+                '. Usage: //am verify on|off')
+            return
+        end
+        verify_enabled = args[2] == 'on'
+        if save_options() then msg('Startup verification ' .. args[2]) end
     elseif verb == 'scan' then
         scan_installed((args[2] or ''):lower() == 'all')
     elseif verb == 'import' then
@@ -606,7 +744,9 @@ local function dispatch(...)
         local who = current_profile() or '(character not logged in)'
         msg('v' .. _addon.version .. ' | character: ' .. who ..
             ' | startup: ' .. (startup_enabled and 'on' or 'off') ..
-            ' | spacing: ' .. tostring(delay_seconds) .. 's')
+            ' | spacing: ' .. tostring(delay_seconds) .. 's' ..
+            ' | verify: ' .. (verify_enabled and 'on' or 'off')) 
+        cluster.status()
         msg('Global: ' .. #read_profile('global') .. ' | character: ' ..
             (who ~= '(character not logged in)' and
                 #read_profile(who) or 0) ..
@@ -617,6 +757,7 @@ local function dispatch(...)
             end)()) .. ' (unverified)')
     elseif verb == 'restart' then
         generation = generation + 1
+        cluster.cancel('manager restart')
         windower.send_command('lua reload AddonManager')
     else
         msg('Unknown command: ' .. verb, 123)
@@ -631,17 +772,18 @@ windower.register_event('load', function()
     read_options()
     current_character = player_name()
     if current_character and startup_enabled then
-        apply_current(3)
+        apply_current(3, true)
     end
 end)
 
 windower.register_event('login', function(name)
     current_character = normal(name) or player_name()
     generation = generation + 1
-    if current_character and startup_enabled then apply_current(3) end
+    if current_character and startup_enabled then apply_current(3, true) end
 end)
 
 windower.register_event('logout', function()
+    cluster.cancel('logout')
     generation = generation + 1
     current_character = nil
     pending_import = nil
@@ -650,6 +792,7 @@ windower.register_event('logout', function()
 end)
 
 windower.register_event('unload', function()
+    cluster.cancel('manager unloaded')
     generation = generation + 1
     running_capture = nil
 end)
