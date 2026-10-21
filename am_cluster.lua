@@ -119,7 +119,187 @@ return function(api)
 
         local s = active
         if verb == 'probe' then
-            local action, addon = value:match('^(%a+):([%a][%w_%-]*)
+            local action, addon = value:match('^(%a+):([%a][%w_%-]*)            if (action ~= 'load' and action ~= 'reload') or not addon then return end
+            if seen[token] then
+                if s and s.token == token and s.leader == from then send(from, 'ready', token) end
+                return
+            end
+            mark_seen(token)
+            if s then send(from, 'busy', token); return end
+            local ok, reason = api.check(addon)
+            if not ok then
+                send(from, 'fail', token)
+                api.message('Rejected all-client ' .. action .. ' ' .. addon ..
+                    ': ' .. tostring(reason), 123)
+                return
+            end
+            s = {me = me, leader = from, verb = action, addon = addon,
+                token = token, phase = 'ready'}
+            active = s
+            send(from, 'ready', token)
+            later(s, 90, function() cancel('leader timed out') end)
+            return
+        end
+        if not s or s.token ~= token then return end
+        if s.leader == me then
+            if verb == 'ready' then
+                if s.phase == 'discovering' then s.members[from] = true
+                elseif not s.members[from] then send(from, 'cancel', token) end
+            elseif verb == 'busy' or verb == 'fail' then
+                cancel(from .. ': not available (' .. verb .. ')')
+            elseif verb == 'abort' and s.members[from] then
+                cancel(from .. ': cancelled locally')
+            elseif verb == 'done' and s.members[from] then
+                complete(s, from)
+            end
+        elseif from == s.leader then
+            if verb == 'cancel' or verb == 'finish' then
+                active = nil
+                if verb == 'cancel' then api.message('All-client batch cancelled by ' .. from) end
+            elseif verb == 'run' and s.phase == 'ready' and value == s.addon then
+                -- Mark before dispatch: duplicate IPC can never issue the same command twice.
+                s.phase = 'running'
+                local ok, reason = api.run(s.verb, s.addon)
+                if ok then
+                    s.phase = 'done'
+                    send(s.leader, 'done', token)
+                else
+                    active = nil
+                    send(s.leader, 'abort', token)
+                    api.message(tostring(reason or 'dispatch failed'), 123)
+                end
+            end
+        end
+    end
+    windower.register_event('ipc message', receive)
+
+    return {
+        cancel = cancel,
+        status = function()
+            api.message('All clients: ' .. (active and
+                (active.phase .. ' for ' .. active.verb .. ' ' .. active.addon) or 'idle') ..
+                ' | stagger ' .. gap .. 's.')
+        end,
+        gap = function(value)
+            if not value then api.message('Cross-client stagger: ' .. gap .. 's.'); return gap end
+            local n = tonumber(value)
+            if not n or n ~= n or n < 0.1 or n > 10 then
+                api.message('Use //am stagger <0.1..10> seconds.', 123)
+                return
+            end
+            gap = n
+            api.message('Cross-client stagger set to ' .. gap .. 's (per initiating client).')
+            return n
+        end,
+        handle = function(verb, addon, extra)
+            verb = (verb or ''):lower()
+            if verb == 'cancel' and not addon and not extra then
+                cancel('user command')
+                return
+            end
+            if (verb ~= 'load' and verb ~= 'reload') or not addon or extra then
+                api.message('Use //am all load <addon> | //am all reload <addon> | //am all cancel.', 123)
+                return
+            end
+            if not addon:match('^[%a][%w_%-]*$') then
+                api.message('Invalid addon name.', 123); return
+            end
+            start(verb, addon:lower())
+        end,
+    }
+end
+)
+            if (action ~= 'load' and action ~= 'reload') or not addon then return end
+            if seen[token] then
+                if s and s.token == token and s.leader == from then send(from, 'ready', token) end
+                return
+            end
+            mark_seen(token)
+            if s then send(from, 'busy', token); return end
+            local ok, reason = api.check(addon)
+            if not ok then
+                send(from, 'fail', token)
+                api.message('Rejected all-client ' .. action .. ' ' .. addon ..
+                    ': ' .. tostring(reason), 123)
+                return
+            end
+            s = {me = me, leader = from, verb = action, addon = addon,
+                token = token, phase = 'ready'}
+            active = s
+            send(from, 'ready', token)
+            later(s, 90, function() cancel('leader timed out') end)
+            return
+        end
+        if not s or s.token ~= token then return end
+        if s.leader == me then
+            if verb == 'ready' then
+                if s.phase == 'discovering' then s.members[from] = true
+                elseif not s.members[from] then send(from, 'cancel', token) end
+            elseif verb == 'busy' or verb == 'fail' then
+                cancel(from .. ': not available (' .. verb .. ')')
+            elseif verb == 'abort' and s.members[from] then
+                cancel(from .. ': cancelled locally')
+            elseif verb == 'done' and s.members[from] then
+                complete(s, from)
+            end
+        elseif from == s.leader then
+            if verb == 'cancel' or verb == 'finish' then
+                active = nil
+                if verb == 'cancel' then api.message('All-client batch cancelled by ' .. from) end
+            elseif verb == 'run' and s.phase == 'ready' and value == s.addon then
+                -- Mark before dispatch: duplicate IPC can never issue the same command twice.
+                s.phase = 'running'
+                local ok, reason = api.run(s.verb, s.addon)
+                if ok then
+                    s.phase = 'done'
+                    send(s.leader, 'done', token)
+                else
+                    active = nil
+                    send(s.leader, 'abort', token)
+                    api.message(tostring(reason or 'dispatch failed'), 123)
+                end
+            end
+        end
+    end
+    windower.register_event('ipc message', receive)
+
+    return {
+        cancel = cancel,
+        status = function()
+            api.message('All clients: ' .. (active and
+                (active.phase .. ' for ' .. active.verb .. ' ' .. active.addon) or 'idle') ..
+                ' | stagger ' .. gap .. 's.')
+        end,
+        gap = function(value)
+            if not value then api.message('Cross-client stagger: ' .. gap .. 's.'); return gap end
+            local n = tonumber(value)
+            if not n or n ~= n or n < 0.1 or n > 10 then
+                api.message('Use //am stagger <0.1..10> seconds.', 123)
+                return
+            end
+            gap = n
+            api.message('Cross-client stagger set to ' .. gap .. 's (per initiating client).')
+            return n
+        end,
+        handle = function(verb, addon, extra)
+            verb = (verb or ''):lower()
+            if verb == 'cancel' and not addon and not extra then
+                cancel('user command')
+                send('*', 'cancel', 'stop')
+                return
+            end
+            if (verb ~= 'load' and verb ~= 'reload') or not addon or extra then
+                api.message('Use //am all load <addon> | //am all reload <addon> | //am all cancel.', 123)
+                return
+            end
+            if not addon:match('^[%a][%w_%-]*$') then
+                api.message('Invalid addon name.', 123); return
+            end
+            start(verb, addon:lower())
+        end,
+    }
+end
+)
             if (action ~= 'load' and action ~= 'reload') or not addon then return end
             if seen[token] then
                 if s and s.token == token and s.leader == from then send(from, 'ready', token) end
