@@ -14,7 +14,7 @@ end
 
 local addon_names = {
     'AddonManager', 'BarFiller', 'EquipViewer', 'ConsoleBGPlus', 'EnemyBar2',
-    'BattleStations', 'JobChange'
+    'BattleStations', 'JobChange', 'Logger'
 }
 
 windower = {
@@ -131,6 +131,18 @@ local before_failed = #commands
 events.load()
 assert(#commands == before_failed + 1 and commands[#commands] == 'lua list',
     'failed safe reload should only issue lua list, never any loads')
+simulate_list = true
+-- A fresh Logger-only snapshot must also be eligible for safe reconciliation.
+simulate_list = false
+logger_emulation = 'full'
+local equip_before_logger_reload = count_command('lua load equipviewer')
+local bar_before_logger_reload = count_command('lua load barfiller')
+events.load()
+assert(count_command('lua load equipviewer') == equip_before_logger_reload,
+    'Logger fallback reloaded an existing addon')
+assert(count_command('lua load barfiller') == bar_before_logger_reload + 1,
+    'Logger fallback failed to reconcile missing addon')
+logger_emulation = 'off'
 simulate_list = true
 
 am('apply')
