@@ -3,11 +3,15 @@
 **Branch:** `dev/addonmanager-v0.5-safe-reload`
 **Version:** 0.5.0-dev.3
 **Date:** 2026-10-21
-**Status:** Automated Lua 5.1 syntax and simulated behavior checks passed. **Cioara safe-reload all-present path confirmed by user in live FFXI on 2026-10-21.** The exact capture source (live listener versus Logger fallback), missing-only reload, and fail-closed behavior remain unverified live. Previous branches are preserved.
+**Status:** Automated Lua 5.1 syntax and simulated checks passed. **Live Cioara safe-reload all-present and GilFinder-only recovery confirmed by user on 2026-10-21.** Snapshot-failure behavior, exact capture source, and quiet-output alternatives remain unverified in-game. Previous branches preserved.
 
 ## Batch 5c — Audit before addon reload; load only missing addons
 
 **Live user report (2026-10-21, Cioara):** Following an AddonManager restart during gameplay, user reported: **“All configured addons already running. Nothing to load.”** This confirms the live audit's all-present/no-work decision in that session. The report does not establish which capture path succeeded, prove that no underlying Windower command was emitted beyond the audited decision, or validate missing-only loading and inconclusive handling. Those remain pending.
+
+**Second live user report (2026-10-21, Cioara):** User deliberately unloaded `gilfinder`, ran `//am restart`, and reported **“only gilfinder reloaded!”** This confirms the successful missing-only recovery path for that addon in the live client, in addition to the previously reported all-present/no-load result. Exact capture mechanism and failure-mode behavior were not independently observed. The user also noted that the full `lua list` chatlog output is too long and requested a quiet/redirected verification mechanism.
+
+**Quiet audit investigation (2026-10-21):** Windower developer Arcon documented `lua list console` as directing list output to the Windower console rather than the FFXI chatlog (Windower forum 2015). Windower also documents `console_log 1|0` logging console output to `Windower/console.log`. A console-file capture with per-request markers may be a possible experiment, but its behavior with multiple concurrent clients and existing console_log settings is **not verified**. `incoming text` callbacks can return a block value, but blanket blocking risks affecting Logger fallback or other chat. Avoid altering the known-good branch's capture/suppression until a separately tested solution exists. References: https://forums.windower.net/index.php?showtopic=724 ; https://docs.windower.net/commands/console/ ; https://docs.windower.net/addons/pluginmanager/ .
 
 **User request:** Reloading AddonManager while already playing should avoid issuing 30+ redundant `lua load` requests. It should automatically inspect the client's currently loaded addons, compare them with the saved global and character profiles, and load only entries genuinely absent. The user also asked how Logger gets its text and whether AddonManager can use Logger's stream for verification.
 
@@ -26,7 +30,7 @@
 
 1. Back up `Windower/addons/AddonManager/`, especially `data/profiles/` and `data/options.txt`. Extract the complete replacement addon folder containing `AddonManager.lua`, `am_cluster.lua`, `README.md`, `WORKFLOW.md`, `TESTING.md`; **do not replace the existing `data/` directory.**
 2. On an already-playing Cioara with Logger running, run `//lua reload AddonManager`. Expect `Safe reload: auditing...`, an audit summary (or Logger recovery notice), then **no load requests** if all configured addons are running. Confirm no duplicate-load errors. **PARTIALLY CONFIRMED LIVE:** User reported all configured running / nothing to load after restart; no detailed console trace or explicit duplicate-error check supplied.
-3. Deliberately unload one noncritical addon that exists in the profile, then reload AddonManager again. Expect **only that addon** to receive `lua load`. Verify visually/in `lua list`.
+3. Deliberately unload one noncritical addon that exists in the profile, then reload AddonManager again. Expect **only that addon** to receive `lua load`. Verify visually/in `lua list`. **CONFIRMED LIVE:** GilFinder was unloaded and only GilFinder reloaded after `//am restart`; detailed console trace not provided.
 4. With all entries already running, reload AddonManager again. Expect a successful audit and **zero load requests**.
 5. Reproduce failed capture safely by unloading Logger (where AM's own live-event capture is also known to fail). Reload AM; it must say verification was inconclusive and **issue no load requests**. Restore Logger manually.
 6. Try `//am verify off` then `//lua reload AddonManager`: the safety preflight must still run, but no additional post-queue audit follows. Restore `//am verify on` as desired.
