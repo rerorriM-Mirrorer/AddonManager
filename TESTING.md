@@ -1,5 +1,48 @@
 # TESTING — AddonManager
 
+**Branch:** `dev/addonmanager-v0.5-quiet-console`
+**Version:** 0.5.0-dev.4
+**Date:** 2026-10-21
+**Status:** The previous v0.5.0-dev.3 Cioara safe-reload/no-work and GilFinder-only recovery paths are **confirmed live** by the user. **Quiet console-file capture is experimental and has only simulated verification.** Main and the earlier development branches are preserved.
+
+## Batch 5d — Quiet console list capture
+
+**User request and evidence:** After confirming `//am restart` loaded only previously-unloaded GilFinder on Cioara, the user requested eliminating the long `lua list` output from the in-game chatlog. The user successfully ran `//lua list console` and prefers its native console display. The user noted we have ConsoleBGPlus and suggested capturing the native `console.log` rather than the official Logger chatlogs.
+
+**Source findings:** On the `consolebg-plus` branch of `rerorriM-Mirrorer/Windower-Addons`, `addons/ConsoleBGPlus/ConsoleBGPlus.lua` runs `console_log 1` in its native-profile synchronization and activity command. ConsoleBGPlus does **not** read `console.log` to render; it draws a frame around Windower's native console, which renders the text itself. The ConsoleBGPlus source notes that console-file growth may come from another client, so capture must not confuse interleaved output. Windower documents `console_log 0|1` for controlling file logging to `Windower/console.log`; the native console is built in, but console-file logging is optional. Do not assume the Config plugin enables it.
+
+### Experimental design
+
+- `//am capture console` is the **default** for this build. `//am capture chat` retains the known-good `lua list` + incoming-text/Logger path. The choice is persisted as `capture=console|chat` in `data/options.txt`.
+- Console capture reads the existing console log's current end position; issues `console_echo "AM_LIST_BEGIN_<token>"`, `lua list console`, then `console_echo "AM_LIST_END_<token>"`. It only accepts a freshly appended result with matching markers, the expected heading and indented addon names.
+- An absent logfile, inactive logging, absent marker, missing end marker, duplicate heading, unexpected list text, or an overlapping marker from another client yields **inconclusive**; no automatic saved-profile loads occur. This is safer than guessing a client identity from a shared file.
+- The manager does **not** run `console_log 1` or `console_log 0`, alter console popup settings, or silently revert to chat. `//am audit` stays read-only; loaded-import remains preview-before-confirmation; `//am apply` remains the user's explicit unfiltered load operation.
+- On fresh character login, existing load behavior remains unchanged; only the post-load audit uses the selected capture method.
+- The previous safe-reload branch is preserved and is the recovery option if console output formatting is unexpected.
+
+### Live test checklist — pending
+
+1. **Back up** the working `Windower/addons/AddonManager/` folder and keep the existing `data/` settings/profiles. Install complete `AddonManager/` from ZIP; do not replace the existing data.
+2. Start Cioara with **ConsoleBGPlus already running**. In the console, `//lua list console` should continue to show the addon list. Confirm `Windower/console.log` actually grows; if it doesn't, check `console_log 1` or revert using `//am capture chat`.
+3. Run `//am capture` (should say `console`). Then `//am audit`; expect a one-line summary **without a full list in FFXI chat**. The native Windower console may show the full list.
+4. Reload AddonManager while logged in; expect only begin/list/end console commands for verification and **zero duplicate addon loads** if all configured entries are running.
+5. Unload a nonessential listed addon such as GilFinder, then `//am restart`. Expect only that addon to load again, without the long in-game list.
+6. Check `//am import loaded` still previews only and `//am import cancel` leaves profiles untouched.
+7. Try `//am capture chat` and a manual audit; verify the prior Logger fallback remains functional. Switch back with `//am capture console` if successful.
+8. With no current `console.log` activity, confirm the preflight says inconclusive and queues **zero addons**. Restore logging with your usual settings rather than letting AM change it. Do not deliberately break a working client mid-combat.
+9. Run near-concurrent audits on two clients and inspect any overlapping output. A collision should fail closed, never produce an apparently authoritative merged list.
+10. Compare file source names with the actual console output; if indentation or prefixes differ, preserve logs for a parser-only follow-up rather than bypassing completeness checks.
+
+### Automated verification and remaining risks
+
+The GitHub Actions workflow checks Lua 5.1 syntax, previous profile and IPC regressions, direct console snapshot tests for stale/partial/empty/interleaved output, and mocked integration of `lua list console` into safe reload. This does **not** demonstrate actual Windows console.log formatting or Windower's command ordering. No in-game success is asserted for dev.4 until user reports it.
+
+**Delivery register:** Development commits and CI run to be confirmed at delivery. No changes to the known-good `dev/addonmanager-v0.5-safe-reload` branch or main. Preserve all prior testing history below.
+
+---
+
+# PREVIOUS TESTING — AddonManager
+
 **Branch:** `dev/addonmanager-v0.5-safe-reload`
 **Version:** 0.5.0-dev.3
 **Date:** 2026-10-21
