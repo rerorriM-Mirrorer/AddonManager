@@ -1,7 +1,7 @@
 # AddonManager
 
 **Author:** Max and A
-**Development version:** 0.5.0-dev.4
+**Development version:** 0.5.0-dev.5
 **Windower:** FFXI / Windower 4 (Lua 5.1)
 **Commands:** //am
 
@@ -76,6 +76,8 @@ Use `//am audit` to repeat the same snapshot manually, or `//am verify off` to s
 **Visibility:** Windower's documented `lua list` has no supported silent argument. AddonManager avoids an additional verbose chat report on success, but cannot guarantee that Windower's own list output remains invisible. The capture first tries incoming-text events and, only if those yield no names, the fresh Logger append. The new fallback still needs live FFXI confirmation; neither method grants direct access to LuaCore's loaded-addon registry.
 
 
+**Live issue (October 22):** In v0.5.0-dev.4, Cioara's `//am audit` rejected console output as “unexpected console text inside loaded list” while GilFinder emitted repeated `glint.lua:30` nil-index errors. The new dev.5 parser ignores only recognizable Lua runtime error lines, still requiring matching markers, a loaded-addon heading, valid indented names and the existing safe-reload identity check. Unrecognized lines fail closed and include a short offending excerpt. When errors are ignored, a single count is reported. A full real `console.log` excerpt is not yet available, so the cause and effectiveness need live confirmation.
+
 ## Quieter console-based addon auditing (v0.5.0-dev.4)
 
 **Default:** `//am capture console`. AddonManager queries `lua list console` instead of sending the list into the FFXI chatlog. It looks for the resulting output in Windower's native `Windower/console.log` file. The built-in console always exists, but **console-file logging is optional and normally off**. Our ConsoleBGPlus fork explicitly issues `console_log 1` on initialization; the Windower Config plugin does not guarantee this. AddonManager **does not** change `console_log` or popup settings itself.
@@ -138,6 +140,7 @@ Run //am import file Cioara to read plain addon names (one per line, optional # 
 - **2026-10-21 / Batch 5b (v0.5.0-dev.2):** Optional fresh Logger-file fallback for audits/imports after user-observed live-text capture failure; reject old/empty snapshots, report capture-source reasons, and retain read-only audit behavior.
 - **2026-10-21 / Batch 5c (v0.5.0-dev.3):** Mid-session manager reload now audits first and issues load requests only for verified missing profile entries; failed or partial captures stop automatic loading without disturbing existing addons. Fresh character-login startup behavior preserved. **Live Cioara all-present and GilFinder missing-only tests passed.**
 - **2026-10-21 / Batch 5d (v0.5.0-dev.4):** Experimental quiet `lua list console` capture with marker-bounded `console.log` parsing; `//am capture console|chat` persists the source choice; no change to console logging or chat suppression. Tests simulated only.
+- **2026-10-22 / Batch 5e (v0.5.0-dev.5):** Recognize and exclude unrelated Lua runtime error/traceback lines from marker-bounded console audits; keep malformed or cross-client output inconclusive. Cioara GilFinder error report recorded; parser change simulated only.
 
 ## Attribution
 
