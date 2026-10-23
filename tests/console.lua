@@ -44,6 +44,45 @@ append(suspicious.begin_marker .. '\nCurrently loaded addons:\n' ..
 lines, reason = module.finish(suspicious)
 assert(lines == nil and reason:find('UNRECOGNIZED CONSOLE MESSAGE', 1, true),
     'unknown interleaved text was silently accepted')
+-- Regression from Killala's live 2026-10-22 log. LuaCore writes
+-- "20:58:48 >   autoex" in console.log: the clock/prompt must not be
+-- interpreted as part of the addon name or as unknown console output.
+local timed = assert(module.begin('tmp_windower/', 'Killala'))
+append('20:58:48 > ' .. timed.begin_marker .. '\n' ..
+    '20:58:48 > Currently loaded addons:\n' ..
+    '20:58:48 >   autoex\n' ..
+    '20:58:48 >   Battle Stations\n' ..
+    '20:58:48 >   AddonManager\n' ..
+    '20:58:48 > ' .. timed.end_marker .. '\n')
+lines, reason = module.finish(timed)
+assert(lines and #lines == 3 and lines[1] == 'autoex' and
+    lines[2] == 'Battle Stations' and lines[3] == 'AddonManager',
+    'time-stamped native console list was not captured')
+
+-- Likewise ignore timestamped *recognized* Lua errors without treating
+-- arbitrary timestamped text as an addon name.
+local timed_noisy = assert(module.begin('tmp_windower/', 'Killala'))
+append('20:58:58 > ' .. timed_noisy.begin_marker .. '\n' ..
+    '20:58:58 > Currently loaded addons:\n' ..
+    '20:58:58 >   autoex\n' ..
+    '20:58:58 > [Lua] gilfinder/glint.lua:30: attempt to index field (nil)\n' ..
+    '20:58:58 >   AddonManager\n' ..
+    '20:58:58 > ' .. timed_noisy.end_marker .. '\n')
+lines, reason = module.finish(timed_noisy)
+assert(lines and #lines == 2 and reason == 1,
+    'timestamped Lua stack error contaminated native list')
+
+local timed_foreign = assert(module.begin('tmp_windower/', 'Killala'))
+append('20:58:58 > ' .. timed_foreign.begin_marker .. '\n' ..
+    '20:58:58 > Currently loaded addons:\n' ..
+    '20:58:58 >   autoex\n' ..
+    '20:58:58 > UNEXPECTED CHATTER\n' ..
+    '20:58:58 >   AddonManager\n' ..
+    '20:58:58 > ' .. timed_foreign.end_marker .. '\n')
+lines, reason = module.finish(timed_foreign)
+assert(lines == nil and reason:find('UNEXPECTED CHATTER', 1, true),
+    'timestamped foreign console line was treated as an addon')
+
 -- Same filesystem file can include other clients. Interleaving must fail.
 local interleaved = assert(module.begin('tmp_windower/', 'Myrr'))
 append(interleaved.begin_marker .. '\nCurrently loaded addons:\n' ..
