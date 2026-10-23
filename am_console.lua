@@ -56,52 +56,9 @@ function M.finish(capture)
 
     local stage, names, ignored_errors = 'begin', {}, 0
     for raw in data:gmatch('[^\r\n]+') do
-        -- With ConsoleBGPlus/native console logging, LuaCore can prefix each
-        -- line as "20:58:48 >   autoex". Strip ONLY the clock and ">" prompt,
-        -- retaining the original whitespace before addon names.
-        -- This deliberately does not turn unindented console chatter into
-        -- an apparently valid addon.
-        local body = raw:match('^%s*%d%d:%d%d:%d%d%s*>(.*)
-        local is_end = line:find(capture.end_marker, 1, true) ~= nil
-        if is_begin then
-            if stage ~= 'begin' then return nil, 'duplicate or interleaved list marker' end
-            stage = 'heading'
-        elseif is_end then
-            if stage ~= 'names' or #names == 0 then
-                return nil, 'console list ended before valid addon entries'
-            end
-            return names, ignored_errors
-        elseif stage ~= 'begin' then
-            if line:find('AM_LIST_BEGIN_', 1, true)
-                or line:find('AM_LIST_END_', 1, true) then
-                return nil, 'another client interleaved a console audit'
-            elseif line:find('Currently loaded addons:', 1, true) then
-                if stage ~= 'heading' then return nil, 'duplicate list heading' end
-                stage = 'names'
-            elseif stage == 'names' then
-                -- Ignore only recognizable Lua runtime stack/error lines.
-                -- Preserve strict list format and reject foreign audit markers.
-                if line:match('%.lua:%d+') or line:match('^stack traceback:')
-                    or line:find('attempt to index', 1, true) then
-                    ignored_errors = ignored_errors + 1
-                else
-                    local entry = body:match('^%s%s+(.+)')
-                    if not entry then
-                        return nil, 'unexpected console text: ' .. line:sub(1, 100)
-                    end
-                    entry = trim(entry)
-                    if entry == '' then return nil, 'empty addon name in list' end
-                    names[#names + 1] = entry
-                end
-            end
-        end
-    end
-    if stage == 'begin' then return nil, 'begin marker not observed in console.log' end
-    return nil, 'complete marker-delimited console list not observed'
-end
-
-return M
-) or raw
+        -- ConsoleBGPlus log lines may begin '20:58:48 >   autoex'.
+        -- Remove the timestamp/command prompt but preserve name indentation.
+        local body = raw:match("^%s*%d%d:%d%d:%d%d%s*>(.*)$") or raw
         local line = trim(body)
         local is_begin = line:find(capture.begin_marker, 1, true) ~= nil
         local is_end = line:find(capture.end_marker, 1, true) ~= nil
@@ -127,7 +84,7 @@ return M
                     or line:find('attempt to index', 1, true) then
                     ignored_errors = ignored_errors + 1
                 else
-                    local entry = raw:match('^%s%s+(.+)')
+                    local entry = body:match('^%s%s+(.+)')
                     if not entry then
                         return nil, 'unexpected console text: ' .. line:sub(1, 100)
                     end
