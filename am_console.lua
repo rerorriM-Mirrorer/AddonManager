@@ -38,6 +38,38 @@ function M.commands(capture)
     }
 end
 
+-- Observe command completion through the native log instead of assuming
+-- three successive send_command calls will execute in FIFO order. This is
+-- *only* a staging signal; finish() still performs authoritative validation.
+function M.progress(capture)
+    local f = io.open(capture.path, 'rb')
+    if not f then return nil, 'console.log unavailable while sequencing' end
+    local size = f:seek('end')
+    if not size or size < capture.offset or size - capture.offset > 131072 then
+        f:close()
+        return nil, 'console.log changed outside safe capture bounds'
+    end
+    f:seek('set', capture.offset)
+    local data = f:read(size - capture.offset) or ''
+    f:close()
+
+    local begun, heading = false, false
+    for raw in data:gmatch('[^\\r\\n]+') do
+        local body = raw:match("^%s*%d%d:%d%d:%d%d%s*>(.*)$") or raw
+        local line = trim(body)
+        if line:find(capture.begin_marker, 1, true) then
+            begun, heading = true, false
+        elseif begun then
+            if line:find('Currently loaded addons:', 1, true) then
+                heading = true
+            elseif heading and body:match('^%s%s+%S') then
+                return 'names_seen'
+            end
+        end
+    end
+    return begun and 'begin_seen' or 'waiting_begin'
+end
+
 function M.finish(capture)
     local f = io.open(capture.path, 'rb')
     if not f then return nil, 'console.log unavailable during capture' end
