@@ -1,7 +1,7 @@
 # AddonManager
 
 **Author:** Max and A
-**Development version:** 0.5.0-dev.6
+**Development version:** 0.5.0-dev.7
 **Windower:** FFXI / Windower 4 (Lua 5.1)
 **Commands:** //am
 
@@ -14,7 +14,7 @@ Manage **Lua addons** with persistent global and per-character lists. Inspired b
 3. Disable the original AddonToggle and Windower plugin_manager in startup configuration; do not run two profile managers simultaneously. Keep the old AddonToggle folder as an offline backup.
 4. Load from the console with `lua load AddonManager` or enable the new folder through the Windower launcher. Type `//am help`.
 5. Replace references to old `//pm` and `//at` commands in macros and scripts; **neither alias is registered**. The BarFiller/EquipViewer pair-toggle has been retired.
-6. **v0.5.0-dev.4 is an experimental console-capture development build.** Safe reload and missing-only GilFinder recovery were verified in-game on Cioara with v0.5.0-dev.3. The new console capture has only simulated verification; retain your known-good version and the data directory for rollback.
+6. **v0.5.0-dev.7 is an experimental console-capture development build.** Safe reload and missing-only GilFinder recovery were verified in-game on Cioara with v0.5.0-dev.3. The new console capture and readable markers have only simulated verification; retain your known-good version and data directory for rollback.
 
 AddonManager itself should be started through Windower, so that it receives actual character login events. Other addon startup arrangements may remain independent.
 
@@ -80,6 +80,8 @@ Use `//am audit` to repeat the same snapshot manually, or `//am verify off` to s
 
 **Killala console timestamp fix (v0.5.0-dev.6):** Her October 22 Logger logs reveal the actual rejected console entry: `20:58:48 >   autoex` (twice, 10 seconds apart). Native `console.log` wraps its output with a `HH:MM:SS >` prefix. The console parser now strips only that prefix, preserving the two-space addon-list indentation, then applies the existing marker, heading, name, and error checks. Untimestamped logs remain supported. This is tested in Lua 5.1 simulation with the exact captured string; live retest is still pending. The previous glint-noise workaround is retained independently.
 
+**Readable markers (v0.5.0-dev.7):** Console audits print two short, character-specific boundaries rather than raw epoch/microsecond identifiers: `AddonManager | Killala | Checking loaded addons (#1)` before the list and `AddonManager | Killala | Finished listing addons (#1)` after it. The small check number distinguishes successive requests during one manager session. Windower itself still prefixes timestamps and quotes the echoed messages in `console.log`. Both commands remain visible in the **native console only**, not the game chatlog. These markers identify the *listing* boundaries, not successful audit verification. Foreign-client markers, including older long-form identifiers, still invalidate an interleaved snapshot. The output format is mocked against the actual uploaded `console.log` structure but is not yet live-tested.
+
 ## Quieter console-based addon auditing (v0.5.0-dev.4)
 
 **Default:** `//am capture console`. AddonManager queries `lua list console` instead of sending the list into the FFXI chatlog. It looks for the resulting output in Windower's native `Windower/console.log` file. The built-in console always exists, but **console-file logging is optional and normally off**. Our ConsoleBGPlus fork explicitly issues `console_log 1` on initialization; the Windower Config plugin does not guarantee this. AddonManager **does not** change `console_log` or popup settings itself.
@@ -144,6 +146,7 @@ Run //am import file Cioara to read plain addon names (one per line, optional # 
 - **2026-10-21 / Batch 5d (v0.5.0-dev.4):** Experimental quiet `lua list console` capture with marker-bounded `console.log` parsing; `//am capture console|chat` persists the source choice; no change to console logging or chat suppression. Tests simulated only.
 - **2026-10-22 / Batch 5e (v0.5.0-dev.5):** Recognize and exclude unrelated Lua runtime error/traceback lines from marker-bounded console audits; keep malformed or cross-client output inconclusive. Cioara GilFinder error report recorded; parser change simulated only.
 - **2026-10-22 / Batch 5f (v0.5.0-dev.6):** Fix real Windower `console.log` timestamp/prompt prefix on loaded-addon rows; preserve existing strict bounds and fail-closed behavior. Two failing Killala live audit excerpts now form the regression fixture.
+- **2026-10-22 / Batch 5g (v0.5.0-dev.7):** Short human-readable console audit start/end messages tagged by character and session check number; source format compared against user-supplied real console.log; parsing safety and previous tests preserved.
 
 ## Attribution
 
