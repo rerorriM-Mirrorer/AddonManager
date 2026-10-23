@@ -17,6 +17,16 @@ local shot, error_message = module.begin('tmp_windower/', 'Cioara')
 assert(shot and not error_message)
 local commands = module.commands(shot)
 assert(#commands == 3 and commands[2] == 'lua list console')
+assert(shot.begin_marker:find('AddonManager | Cioara | Checking loaded addons', 1, true),
+    'console begin marker should be readable')
+assert(shot.end_marker:find('AddonManager | Cioara | Finished listing addons', 1, true),
+    'console end marker should be readable')
+assert(#shot.begin_marker < 90 and #shot.end_marker < 90,
+    'marker exceeded a reasonable console width')
+assert(commands[1] == 'console_echo "' .. shot.begin_marker .. '"' and
+    commands[3] == 'console_echo "' .. shot.end_marker .. '"',
+    'console_echo should use the same friendly marker as the parser')
+
 local lines, reason = module.finish(shot)
 assert(lines == nil and reason, 'stale data treated as current capture')
 append(shot.begin_marker .. '\nCurrently loaded addons:\n' ..
@@ -58,6 +68,36 @@ lines, reason = module.finish(timed)
 assert(lines and #lines == 3 and lines[1] == 'autoex' and
     lines[2] == 'Battle Stations' and lines[3] == 'AddonManager',
     'time-stamped native console list was not captured')
+
+-- Native console.log wraps echo content in literal double quotes, too.
+-- This regression reproduces the exact header/row/quote structure of the
+-- 20:58:48 live Killala console capture rather than a quote-free mock.
+local quoted = assert(module.begin('tmp_windower/', 'Killala'))
+append('20:58:48 > "' .. quoted.begin_marker .. '"\n' ..
+    '20:58:48 > Currently loaded addons:\n' ..
+    '20:58:48 >   autoex\n' ..
+    '20:58:48 >   AutoJoin\n' ..
+    '20:58:48 >   Battle Stations\n' ..
+    '20:58:48 >   gilfinder\n' ..
+    '20:58:48 >   AddonManager\n' ..
+    '20:58:48 > "' .. quoted.end_marker .. '"\n')
+lines, reason = module.finish(quoted)
+assert(lines and #lines == 5 and lines[1] == 'autoex' and
+    lines[4] == 'gilfinder' and lines[5] == 'AddonManager',
+    'real console timestamp + quote format should verify correctly')
+
+-- Interleaving from a different client must be rejected even with readable
+-- markers and valid loaded-addon names around that client's output.
+local other = assert(module.begin('tmp_windower/', 'Franklet'))
+append('20:58:58 > "' .. other.begin_marker .. '"\n' ..
+    '20:58:58 > Currently loaded addons:\n' ..
+    '20:58:58 >   autoex\n' ..
+    '20:58:58 > "AddonManager | Killala | Checking loaded addons (#5)"\n' ..
+    '20:58:58 >   AddonManager\n' ..
+    '20:58:58 > "' .. other.end_marker .. '"\n')
+lines, reason = module.finish(other)
+assert(lines == nil and reason:find('interleaved', 1, true),
+    'foreign readable marker was not rejected')
 
 -- Likewise ignore timestamped *recognized* Lua errors without treating
 -- arbitrary timestamped text as an addon name.
