@@ -20,12 +20,14 @@ function M.begin(path, character)
     f:close()
     if not position then return nil, 'Cannot seek console.log' end
     serial = serial + 1
-    local token = (character or 'unknown'):lower() .. '_' ..
-        tostring(os.time()) .. '_' .. tostring(math.floor(os.clock() * 1000000)) ..
-        '_' .. tostring(serial)
-    return {path = path .. 'console.log', offset = position, token = token,
-        begin_marker = 'AM_LIST_BEGIN_' .. token,
-        end_marker = 'AM_LIST_END_' .. token}
+    -- The file offset isolates a fresh request; the character identifies
+    -- the client, and a short counter distinguishes repeated local audits.
+    -- Keep internal log boundaries readable rather than dumping timestamps.
+    local who = character or 'Unknown'
+    local check = tostring(serial)
+    return {path = path .. 'console.log', offset = position,
+        begin_marker = 'AddonManager | ' .. who .. ' | Checking loaded addons (#' .. check .. ')',
+        end_marker = 'AddonManager | ' .. who .. ' | Finished listing addons (#' .. check .. ')'}
 end
 
 function M.commands(capture)
@@ -71,7 +73,8 @@ function M.finish(capture)
             end
             return names, ignored_errors
         elseif stage ~= 'begin' then
-            if line:find('AM_LIST_BEGIN_', 1, true)
+            if line:find('AddonManager | ', 1, true)
+                or line:find('AM_LIST_BEGIN_', 1, true)
                 or line:find('AM_LIST_END_', 1, true) then
                 return nil, 'another client interleaved a console audit'
             elseif line:find('Currently loaded addons:', 1, true) then
