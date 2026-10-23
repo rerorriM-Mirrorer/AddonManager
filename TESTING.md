@@ -1,5 +1,43 @@
 # TESTING — AddonManager
 
+**Branch:** `fix/addonmanager-audit-sequencing-20261022`
+**Version:** 0.5.0-dev.8
+**Date:** 2026-10-22
+**Status:** **Live dev.7 success on Killala and Franklet confirmed.** Both 22/22 managed addons present, no missing, 27 unmanaged, zero unresolved; safe reload issued no duplicate loads. New dev.8 command-order fix passed automated Lua 5.1 smoke/IPC/console tests but **has not been tested in-game**.
+
+## Batch 5h — Serialized audit commands after observed console output
+
+**User-supplied evidence:**
+- `Killala_2026.10.22(4).log`, lines 2758–2763: Killala first reports `Audit inconclusive (console.log: console list ended before valid addon entries)` with **no loads made**; on the next AddonManager restart, `Audit killala: 22/22 expected loaded; 0 missing; 27 unmanaged; 0 unresolved` and `Safe reload: all configured addons already running. Nothing to load.`
+- `Franklet_2026.10.22(3).log`, lines 1152–1154: same successful `22/22`, `0 missing`, `27 unmanaged`, `0 unresolved`, and nothing loaded.
+- `console(20261023-022255).log`, lines 14774–14828: at 21:21:59 Windower reports the AddonManager dev.7 load followed by `Currently loaded addons:`, all addon entries, **the END marker, then the BEGIN marker**. The submission of three successive commands via `windower.send_command` did not preserve processing order. This caused the safe-reload preflight to fail closed as designed.
+- Same native log, lines 14829–14883: at 21:22:17 the three commands appear correctly in BEGIN/list/END order for Killala; she passes in-game.
+- Same native log, lines 14884–14938: at 21:22:29 Franklet passes with the same readable markers and no content interleaving.
+- Earlier at 21:08:00, a separate older dev.5 attempt showed BEGIN, END, then the addon list; command-order race predates dev.7.
+- GilFinder errors at 21:10:23 (`glint.lua` lines 22/30) preceded a separate GilFinder reload to 1.5.2; neither error occurred within the successful dev.7 audits. Do not attribute these errors to AddonManager. The previous FPS 60→30 issue also remains separate.
+
+**Change:** `am_console.progress()` conservatively reads only new, bounded `console.log` bytes and observes an actual opening marker before the launcher requests `lua list console`. It then observes a heading and at least one indented addon name before asking for the end marker. This is a *staging signal*, not authoritative verification. `am_console.finish()` continues to require exact begin/end boundaries, complete addon list, no unknown interleaved lines, no foreign-client markers, and resolvable names. Failures never trigger safe-reload load commands. Chat/Logger fallback path, saved data, IPC, imports, original parser, and default capture preferences remain unchanged.
+
+**Verified (simulated/static):**
+- [x] GitHub Actions Lua 5.1 syntax check and smoke/profile/IPC/console tests.
+- [x] New console fixture reproduces prior list/END/BEGIN ordering and asserts that observing old entries before the start marker cannot advance the sequence.
+- [x] Start marker observed → begin_seen, heading + entries observed → names_seen; stale files and incomplete captures remain rejected.
+- [x] Smoke test confirms that if console output is unavailable, only the start marker is attempted; the list and end commands are *not* blindly queued, and no speculative addon loads happen.
+- [x] Dev.7 real timestamp, quotation mark, noisy-line, and overlapping-client checks remain in the regression suite.
+
+**Pending live checks (dev.8):**
+- [ ] Back up and preserve `AddonManager/data/`. Install the full `AddonManager/` folder.
+- [ ] On Killala run `//am audit` and `//am restart`; repeat on Franklet. Confirm the console sequence is `Checking loaded addons` → `Currently loaded addons:` + entries → `Finished listing addons` on the **first** request, and only a single audit summary is printed.
+- [ ] Unload one harmless *configured* addon, `//am restart`, and confirm **only that missing addon** is requested. Repeat with all present to confirm no-op.
+- [ ] If command delays still produce no fresh output, verify a failed audit leaves all running addons alone and captures a readable inconclusive reason.
+- [ ] Keep v0.5.0-dev.7 available as the **live-proven** rollback state while staging dev.8 is evaluated.
+
+**Git tracking:** This cumulative test entry and corresponding code/docs changes belong on the isolated `fix/addonmanager-audit-sequencing-20261022` branch. No changes to `main` or the preceding dev.7 branch. Record final commit and CI run with delivery.
+
+---
+
+# PREVIOUS TESTING — AddonManager
+
 **Branch:** `dev/addonmanager-v0.5-readable-markers`
 **Version:** 0.5.0-dev.7
 **Date:** 2026-10-22
