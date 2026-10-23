@@ -3,6 +3,7 @@ on:
   push:
     branches:
       - 'dev/**'
+      - 'fix/addonmanager-*'
   pull_request:
 
 jobs:
