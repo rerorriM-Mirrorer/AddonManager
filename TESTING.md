@@ -3,9 +3,11 @@
 **Branch:** `fix/addonmanager-audit-sequencing-20261022`
 **Version:** 0.5.0-dev.8
 **Date:** 2026-10-22
-**Status:** **Live dev.7 success on Killala and Franklet confirmed.** Both 22/22 managed addons present, no missing, 27 unmanaged, zero unresolved; safe reload issued no duplicate loads. New dev.8 command-order fix passed automated Lua 5.1 smoke/IPC/console tests but **has not been tested in-game**.
+**Status:** **Live dev.8 safe-reload success reported by user on 2026-10-22** ("Safe reloads!!!!"). Previous dev.7 successes on Killala and Franklet remain independently documented (both 22/22 configured addons running, none missing). The specific clients, first-try rate, command-order traces, and missing-only behavior under dev.8 were not included in this new report. Lua 5.1 smoke/IPC/console regressions passed in CI.
 
 ## Batch 5h — Serialized audit commands after observed console output
+
+**New live feedback (2026-10-22):** After receiving the v0.5.0-dev.8 staged console-audit package, the user replied **“Safe reloads!!!!”** This is first-hand live FFXI confirmation of successful safe-reload operation with the updated build. The message did not include explicit client names, trace excerpts, a numeric pass count, or a test with one deliberately missing addon. Those details remain unverified for dev.8; do not infer them from the plural wording.
 
 **User-supplied evidence:**
 - `Killala_2026.10.22(4).log`, lines 2758–2763: Killala first reports `Audit inconclusive (console.log: console list ended before valid addon entries)` with **no loads made**; on the next AddonManager restart, `Audit killala: 22/22 expected loaded; 0 missing; 27 unmanaged; 0 unresolved` and `Safe reload: all configured addons already running. Nothing to load.`
@@ -27,7 +29,7 @@
 
 **Pending live checks (dev.8):**
 - [ ] Back up and preserve `AddonManager/data/`. Install the full `AddonManager/` folder.
-- [ ] On Killala run `//am audit` and `//am restart`; repeat on Franklet. Confirm the console sequence is `Checking loaded addons` → `Currently loaded addons:` + entries → `Finished listing addons` on the **first** request, and only a single audit summary is printed.
+- [ ] On Killala run `//am audit` and `//am restart`; repeat on Franklet. Confirm the console sequence is `Checking loaded addons` → `Currently loaded addons:` + entries → `Finished listing addons` on the **first** request, and only a single audit summary is printed. **Partially confirmed live:** user reports successful safe reloads with dev.8; per-client sequence and first-attempt success details still need logs or explicit confirmation.
 - [ ] Unload one harmless *configured* addon, `//am restart`, and confirm **only that missing addon** is requested. Repeat with all present to confirm no-op.
 - [ ] If command delays still produce no fresh output, verify a failed audit leaves all running addons alone and captures a readable inconclusive reason.
 - [ ] Keep v0.5.0-dev.7 available as the **live-proven** rollback state while staging dev.8 is evaluated.
