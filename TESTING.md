@@ -1,5 +1,32 @@
 # TESTING — AddonManager
 
+**Branch:** `dev/addonmanager-v0.5-console-noise`
+**Version:** 0.5.0-dev.5
+**Date:** 2026-10-22
+**Status:** Cioara live quiet-console audit produced an **inconclusive result** while GilFinder spammed a glint.lua line-30 nil-index runtime error. Error handling revised and mocked tests passed; no live re-test yet. Previously confirmed safe-reload and missing-only behavior remains preserved on a separate branch.
+
+## Batch 5e — Interleaved Lua errors during console list
+
+**User evidence (2026-10-22):** The user ran `//am audit` using quiet console mode, saw repeated GilFinder `glint.lua:30` “attempt to index field … (nil value)” messages, and received `Audit inconclusive (console.log: unexpected console text inside loaded list)`. This does not by itself prove the GilFinder error was the precise rejected line, but the two symptoms occurred together. Audit was read-only and rejected the untrusted list instead of loading anything. Original `console.log` excerpt has not been supplied.
+
+**Fix:** The marker-bounded parser now ignores only recognizable Lua runtime-error and stack-trace lines (`.lua:<number>`, `stack traceback:`, or `attempt to index`) interspersed with normal indented addon rows. It still requires the same unique begin/end markers, proper heading, nonempty entries, no other-client markers, and strict resolution of captured names before safe-reload can load missing addons. It returns a count of ignored error lines for a concise chat report. Any other unexpected console line remains **inconclusive**, now quoting a short offending excerpt to aid diagnosis. Neither the capture mode nor existing safe-reload, startup, or IPC behavior was changed.
+
+**Follow-up tests:**
+- [ ] With GilFinder loaded, `//am audit` should return a summary if only recognized Lua errors contaminate the console capture.
+- [ ] Confirm that `console.log` still contains a complete heading/addon list and both matching AM markers.
+- [ ] If still inconclusive, copy a small excerpt of `Windower/console.log` between `AM_LIST_BEGIN_...` and `AM_LIST_END_...`, omitting unrelated private lines, to calibrate the parser rather than disabling safeguards.
+- [ ] Unload or disable malfunctioning GilFinder as needed before continued testing. The independent glint guard is on `rerorriM-Mirrorer/Windower-Addons` branch `fix/gilfinder-glint-index-20261022` for separate verification.
+- [ ] Confirm successful audit creates no loads; a deliberate one-addon unload still results in one missing-only load after AddonManager restart.
+- [ ] Confirm malformed/interleaved console output still aborts the audit and loads nothing.
+
+**Verification:** GitHub Actions Lua 5.1 syntax + smoke/IPC and console parser regression passed on the development branch. The new parser test injects GilFinder-like error lines between ordinary addon rows, validates the expected count, and confirms unfamiliar log text still fails. This is simulated/static verification, not live FFXI.
+
+**Git tracking:** code commits `1e9d7e22`, `ed8415ac`, `87d727cd`, repaired clean console parser `1808b20e`. Preserve `dev/addonmanager-v0.5-quiet-console` (last quiet-console development revision) and `dev/addonmanager-v0.5-safe-reload` (user-confirmed chat/Logger version). No changes to `main`.
+
+---
+
+# PREVIOUS TESTING — AddonManager
+
 **Branch:** `dev/addonmanager-v0.5-quiet-console`
 **Version:** 0.5.0-dev.4
 **Date:** 2026-10-21
