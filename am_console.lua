@@ -54,7 +54,7 @@ function M.progress(capture)
     f:close()
 
     local begun, heading = false, false
-    for raw in data:gmatch('[^\\r\\n]+') do
+    for raw in data:gmatch('[^\r\n]+') do
         local body = raw:match("^%s*%d%d:%d%d:%d%d%s*>(.*)$") or raw
         local line = trim(body)
         if line:find(capture.begin_marker, 1, true) then
