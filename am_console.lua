@@ -54,7 +54,7 @@ function M.finish(capture)
     f:close()
     if data == '' then return nil, 'no new console.log text' end
 
-    local stage, names = 'begin', {}
+    local stage, names, ignored_errors = 'begin', {}, 0
     for raw in data:gmatch('[^\r\n]+') do
         local line = trim(raw)
         local is_begin = line:find(capture.begin_marker, 1, true) ~= nil
@@ -66,7 +66,7 @@ function M.finish(capture)
             if stage ~= 'names' or #names == 0 then
                 return nil, 'console list ended before valid addon entries'
             end
-            return names
+            return names, ignored_errors
         elseif stage ~= 'begin' then
             if line:find('AM_LIST_BEGIN_', 1, true)
                 or line:find('AM_LIST_END_', 1, true) then
@@ -75,16 +75,32 @@ function M.finish(capture)
                 if stage ~= 'heading' then return nil, 'duplicate list heading' end
                 stage = 'names'
             elseif stage == 'names' then
-                -- Console output usually preserves the two-space list indent.
-                -- Accept whitespace-prefixed names only; non-list console text
-                -- between the delimiters is suspect and fails closed.
-                local entry = raw:match('^%s%s+(.+)%s*$')
-                if not entry then
-                    return nil, 'unexpected console text inside loaded list'
+                -- Error messages from other addons can arrive mid-list. Ignore
+                -- recognizable Lua trace/error lines ONLY; marker boundaries
+                -- and the full list's name resolution remain mandatory.
+                -- Never mistake a stack traceback with indentation for an addon.
+                if line:match('%.lua:%d+')
+                    or line:match('^stack traceback:')
+                    or line:find('attempt to index', 1, true) then
+                    ignored_errors = ignored_errors + 1
+                else
+                    -- Native LuaCore output uses a minimum two-space prefix.
+                    local entry = raw:match('^%s%s+(.+)%s*
+        end
+    end
+    if stage == 'begin' then return nil, 'begin marker not observed in console.log' end
+    return nil, 'complete marker-delimited console list not observed'
+end
+
+return M
+)
+                    if not entry then
+                        return nil, 'unexpected console text: ' .. line:sub(1, 100)
+                    end
+                    entry = trim(entry)
+                    if entry == '' then return nil, 'empty addon name in list' end
+                    names[#names + 1] = entry
                 end
-                entry = trim(entry)
-                if entry == '' then return nil, 'empty addon name in list' end
-                names[#names + 1] = entry
             end
         end
     end
