@@ -75,25 +75,13 @@ function M.finish(capture)
                 if stage ~= 'heading' then return nil, 'duplicate list heading' end
                 stage = 'names'
             elseif stage == 'names' then
-                -- Error messages from other addons can arrive mid-list. Ignore
-                -- recognizable Lua trace/error lines ONLY; marker boundaries
-                -- and the full list's name resolution remain mandatory.
-                -- Never mistake a stack traceback with indentation for an addon.
-                if line:match('%.lua:%d+')
-                    or line:match('^stack traceback:')
+                -- Ignore only recognizable Lua runtime stack/error lines.
+                -- Preserve strict list format and reject foreign audit markers.
+                if line:match('%.lua:%d+') or line:match('^stack traceback:')
                     or line:find('attempt to index', 1, true) then
                     ignored_errors = ignored_errors + 1
                 else
-                    -- Native LuaCore output uses a minimum two-space prefix.
-                    local entry = raw:match('^%s%s+(.+)%s*
-        end
-    end
-    if stage == 'begin' then return nil, 'begin marker not observed in console.log' end
-    return nil, 'complete marker-delimited console list not observed'
-end
-
-return M
-)
+                    local entry = raw:match('^%s%s+(.+)')
                     if not entry then
                         return nil, 'unexpected console text: ' .. line:sub(1, 100)
                     end
