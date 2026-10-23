@@ -578,16 +578,44 @@ local function issue_loaded_list(capture)
     end
     running_capture = capture
     if capture.mode == 'console' then
-        for _, cmd in ipairs(console_capture.commands(capture.console)) do
-            windower.send_command(cmd)
-        end
+        -- A live Windower console may execute separately submitted commands
+        -- out of order (user captured end -> begin after a full list). Issue
+        -- only the start marker, then wait until the log actually contains it.
+        local commands = console_capture.commands(capture.console)
+        windower.send_command(commands[1])
+        coroutine.schedule(function()
+            local function await_stage(wanted)
+                for _ = 1, 40 do
+                    coroutine.sleep(0.05)
+                    if running_capture ~= capture then return false end
+                    local stage = console_capture.progress(capture.console)
+                    if stage == wanted or
+                        (wanted == 'begin_seen' and stage == 'names_seen') then
+                        return true
+                    end
+                end
+                return false
+            end
+            if await_stage('begin_seen') then
+                windower.send_command(commands[2])
+                if await_stage('names_seen') then
+                    -- lua list console emits a complete synchronous list.
+                    -- Allow a brief flush before sending the closing marker.
+                    coroutine.sleep(0.1)
+                    if running_capture ~= capture then return end
+                    windower.send_command(commands[3])
+                end
+            end
+            coroutine.sleep(0.2)
+            if running_capture == capture then finish_loaded_capture(capture) end
+        end, 0)
     else
         windower.send_command('lua list')
+        coroutine.schedule(function()
+            coroutine.sleep(2)
+            if running_capture == capture then finish_loaded_capture(capture) end
+        end, 0)
     end
-    coroutine.schedule(function()
-        coroutine.sleep(2)
-        finish_loaded_capture(capture)
-    end, 0)
     return true
 end
 
