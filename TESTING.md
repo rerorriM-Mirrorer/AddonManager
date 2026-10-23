@@ -1,5 +1,49 @@
 # TESTING — AddonManager
 
+**Branch:** `dev/addonmanager-v0.5-readable-markers`
+**Version:** 0.5.0-dev.7
+**Date:** 2026-10-22
+**Status:** New readable console audit markers committed and simulated-tested. User's real `console.log` confirms the timestamp/quote/list format. **No live FFXI test of dev.6 or dev.7 has been reported.** The dev.3 chat/Logger safe-reload path remains the in-game verified baseline.
+
+## Batch 5g — Readable audit boundaries; real console log comparison
+
+**User request:** Replace the extremely long numbers in the `//am` console audit markers with human-readable text. User provided `console(20261023-020239).log`, containing historical records and two October 22 Killala audits for comparison.
+
+**Observed native `console.log`:**
+- Line 14378: `20:58:48 > "AM_LIST_BEGIN_killala_1792720728_200693295000_1"`
+- Line 14379: `20:58:48 > Currently loaded addons:`
+- Lines 14380–14428: **49 indented addon entries**, including `autoex`, `Battle Stations`, `gilfinder`, `AddonManager`; no other console output interleaved.
+- Line 14429: matching long-form `AM_LIST_END` marker.
+- Lines 14432–14483: a second complete capture at 20:58:58 with the **same 49 names**. Both were followed by the inconclusive message reported in the separate Killala Logger log because dev.5's parser had not stripped Windower's `HH:MM:SS >` prefix.
+- **No `glint.lua` error lines are present in these particular two captured lists.** The prior Cioara GilFinder report remains a distinct observation and cannot explain Killala's failures.
+- The native log wraps `console_echo` text in quotation marks, so parser tests now cover those literal quotes in addition to timestamps.
+
+**Small presentation-only change:** `am_console.lua` replaces long epoch/microsecond identifiers with readable `console_echo` boundary messages:
+```text
+20:58:48 > "AddonManager | Killala | Checking loaded addons (#1)"
+20:58:48 > Currently loaded addons:
+20:58:48 >   autoex
+...
+20:58:48 > "AddonManager | Killala | Finished listing addons (#1)"
+```
+The tiny number distinguishes multiple audits during a single addon-manager instance. The character name separates concurrent clients and the saved log-file offset rejects stale records. These are listing delimiters, not success messages. Foreign markers of the readable or older numeric format still cause an inconclusive result. The user-configured capture mode, audit completeness checks, exact list parsing, profile persistence, IPC dispatch and fail-closed load guard remain unchanged.
+
+**Test checklist:**
+- [x] Lua 5.1 syntax checks and mocked profile/IPC/console pipeline passed in GitHub Actions (record actual run below at delivery).
+- [x] Regression checks readable marker text and `console_echo` command formatting; a five-name list with the real console's time prefix and literal quotation marks is accepted.
+- [x] Regression checks foreign readable markers, older foreign marker style, unknown console chatter, incomplete/missing list, recognized Lua error filtering, and preservation of two-space addon indentation.
+- [ ] Install complete `AddonManager/` folder, preserving the existing `data/` directory. On Killala, run `//am audit` and confirm a concise result in game chat while the console uses the new human-readable start/end text.
+- [ ] Repeat on Franklet, and deliberately unload one harmless configured addon; `//am restart` should load only the missing one.
+- [ ] If the audit remains inconclusive, capture the new begin/end section and reported reason; avoid bypassing client/marker safeguards.
+
+**Verified vs pending:** The previous dev.3 audit-before-reload and missing GilFinder recovery were reported successful by the user in FFXI. The dev.6 timestamp fix and dev.7 marker display change are **simulated only** until the user confirms in-game output. `main` and prior development branches remain unchanged.
+
+**Development register:** code, tests, version bump, docs and workflow artifacts committed on `dev/addonmanager-v0.5-readable-markers`; the final SHA and CI run are the delivery references below.
+
+---
+
+# PREVIOUS TESTING — AddonManager
+
 **Branch:** `fix/addonmanager-console-timestamps-20261022`
 **Version:** 0.5.0-dev.6
 **Date:** 2026-10-22
