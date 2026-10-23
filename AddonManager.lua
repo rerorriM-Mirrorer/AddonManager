@@ -4,7 +4,7 @@
 -- No code copied from the original plugin_manager; see README for historical inspiration.
 _addon.name = 'AddonManager'
 _addon.author = 'Max and A'
-_addon.version = '0.5.0-dev.5'
+_addon.version = '0.5.0-dev.6'
 _addon.commands = {'am'}
 
 require('chat')
