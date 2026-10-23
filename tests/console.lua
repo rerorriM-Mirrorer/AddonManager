@@ -27,13 +27,37 @@ assert(commands[1] == 'console_echo "' .. shot.begin_marker .. '"' and
     commands[3] == 'console_echo "' .. shot.end_marker .. '"',
     'console_echo should use the same friendly marker as the parser')
 
+local stage = module.progress(shot)
+assert(stage == 'waiting_begin', 'old log text was treated as fresh begin marker')
 local lines, reason = module.finish(shot)
 assert(lines == nil and reason, 'stale data treated as current capture')
-append(shot.begin_marker .. '\nCurrently loaded addons:\n' ..
-    '  Equipviewer\n  AddonManager\n' .. shot.end_marker .. '\n')
+append(shot.begin_marker .. '\n')
+stage = module.progress(shot)
+assert(stage == 'begin_seen', 'start marker did not advance console sequence')
+append('Currently loaded addons:\n  Equipviewer\n  AddonManager\n')
+stage = module.progress(shot)
+assert(stage == 'names_seen', 'complete list rows did not advance console sequence')
+append(shot.end_marker .. '\n')
 lines, reason = module.finish(shot)
 assert(lines and #lines == 2 and lines[1] == 'Equipviewer' and
     lines[2] == 'AddonManager', 'fresh bounded console list not captured')
+-- Live 21:21:59 regression: Windower previously reordered the three
+-- commands as list -> end -> begin. The staging API must *not* accept a
+-- heading/list before our observed begin marker, and finish() must fail.
+local reordered = assert(module.begin('tmp_windower/', 'Killala'))
+append('21:21:59 > Currently loaded addons:\n' ..
+    '21:21:59 >   autoex\n' ..
+    '21:21:59 >   AddonManager\n' ..
+    '21:21:59 > "' .. reordered.end_marker .. '"\n')
+assert(module.progress(reordered) == 'waiting_begin',
+    'unbounded native list advanced sequencing early')
+append('21:21:59 > "' .. reordered.begin_marker .. '"\n')
+assert(module.progress(reordered) == 'begin_seen',
+    'old list rows were treated as post-begin output')
+local refused, why = module.finish(reordered)
+assert(refused == nil and why,
+    'out-of-order command log was incorrectly accepted as authoritative')
+
 -- A second captured response contains noisy GilFinder stack errors interleaved
 -- with the legitimate list. Recognized errors can be ignored, not promoted to
 -- addon names or allowed to invalidate the entire audit.
