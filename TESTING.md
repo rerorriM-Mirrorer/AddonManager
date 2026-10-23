@@ -1,5 +1,39 @@
 # TESTING — AddonManager
 
+**Branch:** `fix/addonmanager-console-timestamps-20261022`
+**Version:** 0.5.0-dev.6
+**Date:** 2026-10-22
+**Status:** Killala's new real FFXI Logger capture revealed a native-console timestamp prefix which made quiet audits fail. A minimal parser fix and exact-prefix Lua 5.1 regression have passed CI; **the new patch has not been tested in-game**. Preserve the user-confirmed dev.3 safe-reload baseline.
+
+## Batch 5f — Native console timestamp/prompt prefix
+
+**Uploaded user evidence:** `Killala_2026.10.22(3).log` (Killala, 2,650 decoded lines) reports:
+- At log line 2633, `[AM] Safe reload: auditing global + killala before any load requests.`
+- Line 2634: `[AM] Audit inconclusive (console.log: unexpected console text: 20:58:48 >   autoex). No changes made.`
+- Line 2635: `[AM] Safe reload: no addons loaded because verification was inconclusive.`
+- Lines 2638–2640 repeat the sequence, with `20:58:58 >   autoex`.
+This establishes the immediate failure as an **unhandled `HH:MM:SS >` prefix**, not a glint runtime-error line. The earlier Cioara glint spam and error-line handling remain separate observations; the full native `console.log` excerpt was not uploaded.
+
+**Fix:** In `am_console.lua`, for each fresh captured log line, remove *only* the optional `HH:MM:SS >` clock/prompt prefix and retain following indentation. Then apply the unchanged begin/end marker, heading, two-space name, interleaving, incomplete-list, error-line and safe-reload checks. Lines without the prefix remain unchanged. This is parsing-only: no changes to addon loading, character profile files, IPC, logging settings, or command behavior.
+
+**Verification:**
+- [x] Lua 5.1 syntax and mocked profile, IPC and console-capture tests pass on GitHub Actions.
+- [x] Regression test supplies the exact `20:58:48 >   autoex` format with timestamped start/end markers and heading, and checks that `autoex`, `Battle Stations`, and `AddonManager` are extracted.
+- [x] Regression confirms a timestamped GilFinder-like Lua error can be ignored without treating it as an addon, while unrelated timestamped chatter still aborts the capture.
+- [x] Previously supported unprefixed lists, stale lists, truncated lists, foreign-client markers and incomplete captures retain tests.
+- [ ] **Live Killala check:** reload AddonManager or run `//am audit`; it should complete a list-based audit rather than reject `autoex`.
+- [ ] **Live Franklet check:** confirm the same quiet-console path works independently on his client.
+- [ ] Repeat a missing-only reload using one harmless addon; verify no extra loads.
+- [ ] If failure persists, capture the marker-bounded `console.log` excerpt and check another formatting variant before expanding accepted inputs.
+
+**Related but separate observations from these two character Logger logs:** Killala reports frame-rate 30 FPS twice (after a 60 FPS setting); Franklet reports a 60→30 transition twice. These logs alone do not identify the addon that changed the FPS. Franklet also reports five XIVCrossbar messages that `pet` set was absent for his BST/WAR job. Neither issue is changed in this patch.
+
+**Delivery:** Working branch and commit identified at packaging; preserve preceding `dev/addonmanager-v0.5-console-noise` and `dev/addonmanager-v0.5-safe-reload` branches. No `main` changes; no FFXI live test claimed for this fix.
+
+---
+
+# PREVIOUS TESTING — AddonManager
+
 **Branch:** `dev/addonmanager-v0.5-console-noise`
 **Version:** 0.5.0-dev.5
 **Date:** 2026-10-22
