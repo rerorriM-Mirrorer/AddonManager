@@ -4,7 +4,7 @@
 -- No code copied from the original plugin_manager; see README for historical inspiration.
 _addon.name = 'AddonManager'
 _addon.author = 'Max and A'
-_addon.version = '0.5.0-dev.4'
+_addon.version = '0.5.0-dev.5'
 _addon.commands = {'am'}
 
 require('chat')
@@ -483,6 +483,10 @@ local function finish_loaded_capture(capture)
         if entries then
             capture.started, capture.lines = true, entries
             capture.snapshot_source = 'console.log marker bounded'
+            if console_reason and console_reason > 0 then
+                msg(('Console audit: ignored %d unrelated Lua error line(s).'):format(
+                    console_reason))
+            end
         end
     elseif not capture.started or #capture.lines == 0 then
         local recovered
