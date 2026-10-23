@@ -333,8 +333,10 @@ console_emulation = false
 local console_raw = contents('tmp_windower/console.log')
 local before_failed_console = #commands
 events.load()
-assert(#commands == before_failed_console + 3,
-    'console preflight should emit only the marker/list/marker commands')
+assert(#commands == before_failed_console + 1,
+    'no console log response must stop after the initial start marker')
+assert(count_command('lua list console') >= console_list_before + 1,
+    'prior successful quiet audit was not exercised')
 assert(count_command('lua load equipviewer') == running_equip_before,
     'no fresh console capture must not issue load requests')
 console_emulation = true
