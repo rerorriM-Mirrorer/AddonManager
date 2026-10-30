@@ -356,9 +356,9 @@ am('delay', 'barfiller', '2')
 am('delay', 'enemybar2', '0.5')
 am('delay', 'list')
 local options = contents('tmp_am/data/options.txt')
-assert(options:find('delay=0\\n', 1, true) and
-    options:find('delay_addon_barfiller=2\\n', 1, true) and
-    options:find('delay_addon_enemybar2=0.5\\n', 1, true),
+assert(options:find('delay=0\n', 1, true) and
+    options:find('delay_addon_barfiller=2\n', 1, true) and
+    options:find('delay_addon_enemybar2=0.5\n', 1, true),
     'load offsets or default spacing not saved')
 local old_send, old_sleep = windower.send_command, coroutine.sleep
 local elapsed, timed_loads = 0, {}
