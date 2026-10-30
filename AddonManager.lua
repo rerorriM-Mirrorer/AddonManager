@@ -4,11 +4,12 @@
 -- No code copied from the original plugin_manager; see README for historical inspiration.
 _addon.name = 'AddonManager'
 _addon.author = 'Max and A'
-_addon.version = '0.5.0-dev.8'
+_addon.version = '0.5.0-dev.9'
 _addon.commands = {'am'}
 
 require('chat')
 local console_capture = require('am_console')
+local load_schedule = require('am_schedule')
 
 local root = windower.addon_path
 local data_dir = root .. 'data/'
@@ -21,7 +22,8 @@ local running_capture = nil -- Only the current client's most recent live lua-li
 local startup_enabled = true
 local verify_enabled = true -- Report startup discrepancies; never auto-repair.
 local capture_mode = 'console' -- Quiet native console; chat remains a fallback option.
-local delay_seconds = 1
+local delay_seconds = 0 -- Default init.txt-style immediate dispatch.
+local addon_delays = {} -- Globally saved offset in seconds per addon (load only).
 local current_character = nil
 local requested = {} -- This is intent, NOT a confirmed list of loaded addons.
 local begin_audit -- Assigned below; startup queue callback uses it after source initialization.
@@ -218,17 +220,35 @@ local function command_items(kind, list, label, start_after, after)
         if after then after() end
         return
     end
-    msg(('%s: queued %d %s request(s), %.1fs spacing'):format(
-        label, #list, kind, delay_seconds))
+
+    -- Build an ordered plan of offsets from the start of dispatch. Ordinary
+    -- addons use global spacing (zero by default); explicit load offsets run
+    -- independently and cannot hold up normal addons earlier in the timeline.
+    local plan = load_schedule.plan(list, kind, delay_seconds, addon_delays)
+    local special_count = 0
+    if kind == 'load' then
+        for _, item in ipairs(plan) do
+            if addon_delays[item.addon] ~= nil then
+                special_count = special_count + 1
+            end
+        end
+    end
+    msg(('%s: queued %d %s request(s), %gs spacing, %d special offset(s)'):format(
+        label, #list, kind, delay_seconds, special_count))
     -- Scan only once per batch to avoid expensive repeated directory reads.
     local installed, scanned = installed_lookup()
     coroutine.schedule(function()
         if start_after and start_after > 0 then coroutine.sleep(start_after) end
-        for i, addon in ipairs(list) do
+        local previous_at = 0
+        for _, item in ipairs(plan) do
+            local wait = item.at - previous_at
+            if wait > 0 then coroutine.sleep(wait) end
+            previous_at = item.at
             if generation ~= token then
                 msg(label .. ': previous queue canceled')
                 return
             end
+            local addon = item.addon
             if kind == 'load' then
                 if scanned and not installed[addon] then
                     msg('Skipping missing addon: ' .. addon, 123)
@@ -244,7 +264,6 @@ local function command_items(kind, list, label, start_after, after)
                     msg('Protected addon not unloaded: ' .. addon, 123)
                 end
             end
-            if i < #list then coroutine.sleep(delay_seconds) end
         end
         msg(label .. ': requests dispatched (completion not verified)')
         if after then after() end
@@ -290,7 +309,9 @@ local function print_help()
         {'//am import confirm|cancel', 'Commit or discard the preview'},
         {'//am prune [character]', 'Preview profile entries already in global'},
         {'//am prune confirm|cancel', 'Save cleanup or discard preview'},
-        {'//am delay [seconds]', 'Show or set stagger interval (0..10)'},
+        {'//am delay [seconds]', 'Global load spacing (default 0; 0..10)'},
+        {'//am delay <addon> <seconds|off>', 'Addon start offset, independent of others'},
+        {'//am delay list', 'Show addon-specific load offsets'},
         {'//am startup on|off', 'Automatic profile load after login'},
         {'//am audit', 'Read-only check against lua list'},
         {'//am capture [console|chat]', 'Select audit output (default console)'},
@@ -807,6 +828,14 @@ local function read_options()
         if key == 'delay' then
             local n = tonumber(value)
             if n and n >= 0 and n <= 10 then delay_seconds = n end
+        elseif key:sub(1, 12) == 'delay_addon_' then
+            local addon = key:sub(13)
+            local n = tonumber(value)
+            if valid_name(addon) and addon ~= 'addonmanager' and
+                addon ~= 'addontoggle' and addon ~= 'plugin_manager' and
+                n and n >= 0 and n <= 10 then
+                addon_delays[addon] = n
+            end
         elseif key == 'startup' then
             startup_enabled = trim(value) ~= 'off'
         elseif key == 'verify' then
@@ -826,6 +855,14 @@ local function save_options()
     if not f then msg('Cannot save options: ' .. tostring(err), 123); return false end
     f:write('startup=', startup_enabled and 'on' or 'off', '\n')
     f:write('delay=', tostring(delay_seconds), '\n')
+    -- Sorting makes settings diffs stable and keeps offsets separate from
+    -- global/character addon membership files.
+    local delayed_names = {}
+    for addon in pairs(addon_delays) do delayed_names[#delayed_names + 1] = addon end
+    table.sort(delayed_names)
+    for _, addon in ipairs(delayed_names) do
+        f:write('delay_addon_', addon, '=', tostring(addon_delays[addon]), '\n')
+    end
     f:write('verify=', verify_enabled and 'on' or 'off', '\n')
     f:write('capture=', capture_mode, '\n')
     f:write('stagger=', tostring(cluster.gap()), '\n')
@@ -921,13 +958,46 @@ local function dispatch(...)
     elseif verb == 'prune' then
         prune_command(args[2])
     elseif verb == 'delay' then
-        if not args[2] then msg(('Current load spacing: %.1f seconds'):format(delay_seconds)); return end
-        local seconds = tonumber(args[2])
-        if not seconds or seconds < 0 or seconds > 10 then
-            msg('Usage: //am delay <0..10 seconds>', 123); return
+        if not args[2] or args[2]:lower() == 'list' then
+            local names = {}
+            for addon in pairs(addon_delays) do names[#names + 1] = addon end
+            table.sort(names)
+            msg(('Default load spacing: %gs | %d addon offset(s)'):format(
+                delay_seconds, #names))
+            for _, addon in ipairs(names) do
+                msg(('  %s: %gs after batch start'):format(addon, addon_delays[addon]), 0)
+            end
+            return
         end
-        delay_seconds = seconds
-        if save_options() then msg('Load spacing saved: ' .. tostring(delay_seconds) .. 's') end
+        if not args[3] then
+            local seconds = tonumber(args[2])
+            if not seconds or seconds < 0 or seconds > 10 then
+                msg('Usage: //am delay <0..10> | <addon> <0..10|off> | list', 123)
+                return
+            end
+            delay_seconds = seconds
+            if save_options() then msg('Default load spacing: ' .. tostring(delay_seconds) .. 's') end
+            return
+        end
+        local addon, choice = normal(args[2]), args[3]:lower()
+        if not addon or addon == 'addonmanager' or addon == 'addontoggle' or
+            addon == 'plugin_manager' or args[4] then
+            msg('Usage: //am delay <addon> <0..10|off>', 123)
+            return
+        end
+        if choice == 'off' then
+            addon_delays[addon] = nil
+            if save_options() then msg('Removed load offset for ' .. addon) end
+            return
+        end
+        local seconds = tonumber(choice)
+        if not seconds or seconds < 0 or seconds > 10 then
+            msg('Usage: //am delay <addon> <0..10|off>', 123)
+            return
+        end
+        addon_delays[addon] = seconds
+        if save_options() then msg(('Load offset for %s: %gs after batch start'):format(
+            addon, seconds)) end
     elseif verb == 'startup' then
         if args[2] ~= 'on' and args[2] ~= 'off' then
             msg('Startup is ' .. (startup_enabled and 'on' or 'off') ..
@@ -940,6 +1010,11 @@ local function dispatch(...)
         msg('v' .. _addon.version .. ' | character: ' .. who ..
             ' | startup: ' .. (startup_enabled and 'on' or 'off') ..
             ' | spacing: ' .. tostring(delay_seconds) .. 's' ..
+            ' | custom offsets: ' .. tostring((function()
+                local n = 0
+                for _ in pairs(addon_delays) do n = n + 1 end
+                return n
+            end)()) ..
             ' | verify: ' .. (verify_enabled and 'on' or 'off') ..
             ' | capture: ' .. capture_mode) 
         cluster.status()
