@@ -74,7 +74,7 @@ Run `//am all load trust` or `//am all reload xivcrossbar` **from one Windower c
 
 The addon validates actual installed addon folders before dispatch. Only `load` and `reload` of a specific addon are allowed; management addons are protected. `//am all reload` **without an addon** deliberately displays usage rather than reloading 50+ addons at once. `//am all cancel` stops a pending batch. A peer that refuses a request or fails to acknowledge it causes the batch to stop; **there is no automatic retry**. Acknowledgements confirm command dispatch, *not successful addon initialization*. Do not rebroadcast the same command using Send, or each client may try to start a separate batch.
 
-`//am delay` remains the **within-client** profile queue spacing. `//am stagger` controls **between-client** one-addon operations. Neither feature automatically applies a whole profile to other clients.
+`//am delay` controls **within-client** profile timing, including individual addon offsets. `//am stagger` controls **between-client** one-addon operations and is unchanged.
 
 ## Startup verification (v0.5)
 
@@ -161,6 +161,7 @@ Run //am import file Cioara to read plain addon names (one per line, optional # 
 - **2026-10-22 / Batch 5f (v0.5.0-dev.6):** Fix real Windower `console.log` timestamp/prompt prefix on loaded-addon rows; preserve existing strict bounds and fail-closed behavior. Two failing Killala live audit excerpts now form the regression fixture.
 - **2026-10-22 / Batch 5g (v0.5.0-dev.7):** Short human-readable console audit start/end messages tagged by character and session check number; source format compared against user-supplied real console.log; parsing safety and previous tests preserved.
 - **2026-10-22 / Batch 5h (v0.5.0-dev.8):** Fix nondeterministic Windower ordering of the begin/list/end console commands by advancing only after actual file-log observation. Live Killala and Franklet successes in dev.7 retained; dev.8 staging awaits live verification.
+- **2026-10-30 / Batch 5i (v0.5.0-dev.9):** New installs load with zero gap by default; saved per-addon start offsets delay only selected addons. Preserve old saved spacing, safe-reload audit-first behavior, cancellations, and independent cross-client staggering. Lua 5.1 simulated tests, live test pending.
 
 ## Attribution
 
