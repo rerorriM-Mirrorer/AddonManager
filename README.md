@@ -14,7 +14,7 @@ Manage **Lua addons** with persistent global and per-character lists. Inspired b
 3. Disable the original AddonToggle and Windower plugin_manager in startup configuration; do not run two profile managers simultaneously. Keep the old AddonToggle folder as an offline backup.
 4. Load from the console with `lua load AddonManager` or enable the new folder through the Windower launcher. Type `//am help`.
 5. Replace references to old `//pm` and `//at` commands in macros and scripts; **neither alias is registered**. The BarFiller/EquipViewer pair-toggle has been retired.
-6. **v0.5.0-dev.8 is an experimental console-capture development build.** Safe reload and missing-only GilFinder recovery were verified in-game on Cioara with v0.5.0-dev.3. The new console capture and readable markers have only simulated verification; retain your known-good version and data directory for rollback.
+6. **v0.5.0-dev.9 is a development build.** Its new timing scheduler is simulated-tested but has not been tried in FFXI. The dev.8 safe-reload design is live-confirmed; preserve the working install and its data directory.
 
 AddonManager itself should be started through Windower, so that it receives actual character login events. Other addon startup arrangements may remain independent.
 
@@ -59,6 +59,14 @@ Example: //am add global ConsoleBGPlus and //am add Cioara EnemyBar2. Then //am 
 
 Every add/remove immediately saves a plain text file, e.g. data/profiles/global.txt or data/profiles/cioara.txt. Editing is independent of loading. Duplicate entries are suppressed. Saved startup options are kept in data/options.txt.
 
+
+## Profile timing (v0.5.0-dev.9)
+
+New installations dispatch ordinary profile load requests with **zero deliberate spacing**, much like Windower's `init.txt`. A specially delayed addon can have its own batch-relative offset: `//am delay trust 2` requests Trust two seconds after that profile batch begins without holding up any ordinary addons. `//am delay trust off` clears the exception; `//am delay list` displays settings. Overrides are shared across characters on the same AddonManager installation and saved as `delay_addon_trust=2` in `data/options.txt`; character and global membership profiles remain untouched.
+
+**For existing installs:** a saved `delay=1` (or any previous value) is intentionally preserved; issue `//am delay 0` once to opt into zero spacing. Nonzero ordinary spacing remains available. Per-addon offsets apply to profile loads, not unloads, and do not modify `//am stagger` cross-client IPC. The fresh-login initial wait remains three seconds. The post-load verification is scheduled only after the final delayed load request has been dispatched, with its existing three-second settle buffer. Safe reload still audits first and loads only verified missing addons; cancellation invalidates unsent requests. Addon initialization completion is not inferred from command dispatch.
+
+**Test status:** simulated Lua 5.1 and mock Windower checks; zero-spacing and individual offsets await live FFXI verification. The preceding dev.8 safe-reload build has live user confirmation.
 
 ## Multi-client stagger (v0.5)
 
