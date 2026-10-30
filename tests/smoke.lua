@@ -343,6 +343,77 @@ console_emulation = true
 am('capture', 'chat')
 assert(contents('tmp_am/data/options.txt'):find('capture=chat', 1, true),
     'chat fallback preference not persisted')
+
+-- Profile load timing: per-addon offsets never stall ordinary addons.
+-- A previously saved global delay (1s in this fixture) remains until changed.
+assert(contents('tmp_am/data/options.txt'):find('delay=1', 1, true),
+    'old saved load spacing not preserved')
+am('add', 'Myrr', 'BarFiller')
+am('add', 'Myrr', 'EnemyBar2')
+am('add', 'Myrr', 'EquipViewer')
+am('delay', '0')
+am('delay', 'barfiller', '2')
+am('delay', 'enemybar2', '0.5')
+am('delay', 'list')
+local options = contents('tmp_am/data/options.txt')
+assert(options:find('delay=0\\n', 1, true) and
+    options:find('delay_addon_barfiller=2\\n', 1, true) and
+    options:find('delay_addon_enemybar2=0.5\\n', 1, true),
+    'load offsets or default spacing not saved')
+local old_send, old_sleep = windower.send_command, coroutine.sleep
+local elapsed, timed_loads = 0, {}
+coroutine.sleep = function(seconds) elapsed = elapsed + (seconds or 0) end
+windower.send_command = function(command)
+    if command:find('^lua load ') then
+        timed_loads[#timed_loads + 1] = {command, elapsed}
+    end
+    return old_send(command)
+end
+am('load', 'Myrr')
+assert(#timed_loads == 3, 'timed profile sent unexpected number of loads')
+assert(timed_loads[1][1] == 'lua load equipviewer' and timed_loads[1][2] == 0,
+    'ordinary addon blocked by per-addon delay')
+assert(timed_loads[2][1] == 'lua load enemybar2' and timed_loads[2][2] == 0.5,
+    'half-second offset did not apply')
+assert(timed_loads[3][1] == 'lua load barfiller' and timed_loads[3][2] == 2,
+    'two-second offset did not apply')
+-- Removed overrides restore the original order at precisely zero gap.
+am('delay', 'barfiller', 'off')
+am('delay', 'enemybar2', 'off')
+assert(not contents('tmp_am/data/options.txt'):find('delay_addon_', 1, true),
+    'removed overrides remained saved')
+elapsed, timed_loads = 0, {}
+am('load', 'Myrr')
+assert(#timed_loads == 3, 'zero-gap load omitted a profile addon')
+for _, event in ipairs(timed_loads) do
+    assert(event[2] == 0, 'zero default spacing inserted a sleep')
+end
+-- Nonzero global spacing continues to work for existing users.
+am('delay', '1')
+elapsed, timed_loads = 0, {}
+am('load', 'Myrr')
+assert(#timed_loads == 3 and timed_loads[1][2] == 0 and
+    timed_loads[2][2] == 1 and timed_loads[3][2] == 2,
+    'legacy global spacing not honored')
+-- Cancel during the one delayed wait: no late addon may be dispatched.
+am('delay', '0')
+am('delay', 'barfiller', '2')
+elapsed, timed_loads = 0, {}
+local cancel_once = true
+coroutine.sleep = function(seconds)
+    elapsed = elapsed + (seconds or 0)
+    if cancel_once and seconds == 2 then
+        cancel_once = false
+        events.logout()
+    end
+end
+am('load', 'Myrr')
+assert(#timed_loads == 2, 'logout did not cancel an outstanding delayed addon')
+assert(timed_loads[1][1] == 'lua load enemybar2' and
+    timed_loads[2][1] == 'lua load equipviewer',
+    'cancellation changed immediate addon order')
+windower.send_command, coroutine.sleep = old_send, old_sleep
+am('delay', 'barfiller', 'off')
 am('unload', 'manager')
 assert(count_command('lua unload AddonManager') >= 1, 'explicit manager unload missing')
 print('AddonManager mock smoke test: PASS (' .. #commands .. ' Windower commands)')
