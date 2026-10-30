@@ -345,9 +345,10 @@ assert(contents('tmp_am/data/options.txt'):find('capture=chat', 1, true),
     'chat fallback preference not persisted')
 
 -- Profile load timing: per-addon offsets never stall ordinary addons.
--- A previously saved global delay (1s in this fixture) remains until changed.
-assert(contents('tmp_am/data/options.txt'):find('delay=1', 1, true),
-    'old saved load spacing not preserved')
+-- The earlier test explicitly saved 0.5s; the new default must not
+-- silently overwrite a user's existing timing setting.
+assert(contents('tmp_am/data/options.txt'):find('delay=0.5', 1, true),
+    'previously saved load spacing was not preserved')
 am('add', 'Myrr', 'BarFiller')
 am('add', 'Myrr', 'EnemyBar2')
 am('add', 'Myrr', 'EquipViewer')
