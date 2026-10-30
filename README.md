@@ -1,7 +1,7 @@
 # AddonManager
 
 **Author:** Max and A
-**Development version:** 0.5.0-dev.8
+**Development version:** 0.5.0-dev.9
 **Windower:** FFXI / Windower 4 (Lua 5.1)
 **Commands:** //am
 
@@ -10,7 +10,7 @@ Manage **Lua addons** with persistent global and per-character lists. Inspired b
 ## Installation
 
 1. **Back up** your working Windower/addons/AddonToggle folder, especially `data/profiles/`, `data/options.txt`, and any imported lists.
-2. Create Windower/addons/AddonManager/ and place **AddonManager.lua, am_cluster.lua, and README.md** there. Copy the **existing AddonToggle/data/** folder into **AddonManager/data/** to retain every profile and option.
+2. Create Windower/addons/AddonManager/ and place **AddonManager.lua, am_cluster.lua, am_console.lua, am_schedule.lua, and README.md** there. Copy the **existing AddonToggle/data/** folder into **AddonManager/data/** to retain every profile and option.
 3. Disable the original AddonToggle and Windower plugin_manager in startup configuration; do not run two profile managers simultaneously. Keep the old AddonToggle folder as an offline backup.
 4. Load from the console with `lua load AddonManager` or enable the new folder through the Windower launcher. Type `//am help`.
 5. Replace references to old `//pm` and `//at` commands in macros and scripts; **neither alias is registered**. The BarFiller/EquipViewer pair-toggle has been retired.
@@ -43,7 +43,10 @@ AddonManager itself should be started through Windower, so that it receives actu
 | //am import confirm or cancel | Save preview or discard it |
 | //am prune [character] | Preview entries in this character's list already covered by global |
 | //am prune confirm or cancel | Save proposed removal or discard it; no runtime unloading |
-| //am delay [seconds] | Set spacing between load requests (0–10, default 1) |
+| //am delay [seconds] | Ordinary load spacing (default 0; 0–10s) |
+| //am delay ADDON SECONDS | Independent start offset for this addon (0–10s) |
+| //am delay ADDON off | Remove addon-specific offset |
+| //am delay list | Show all saved addon offsets |
 | //am startup on/off | Enable or disable auto-loading on character login |
 | //am audit | Compare loaded addons with global + this character; read-only |
 | //am capture [console|chat] | Console log (quiet, default) or previous chat/Logger capture |
