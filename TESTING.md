@@ -1,5 +1,49 @@
 # TESTING — AddonManager
 
+**Branch:** `dev/addonmanager-v0.5-zero-default-delays`
+**Version:** 0.5.0-dev.9
+**Date:** 2026-10-30
+**Status:** Zero-gap default and per-addon independent startup offsets are **implemented and simulated-tested**, not yet tested in live FFXI. The preceding dev.8 safe-reload/console-sequencing build has user-confirmed live success.
+
+## Batch 5i — Immediate profile loads with selective start offsets
+
+**User request:** Ordinary addons already load fine together using Windower's `init.txt`, so profile loads should default to no artificial gap. Add optional per-addon delays for addons that prove finicky. User approved implementing the proposed behavior and commands.
+
+**Baseline:** Branch `fix/addonmanager-audit-sequencing-20261022` at dev.8. Existing `command_items()` used a hardcoded 1-second default interval between every load/unload request; a saved `delay=` value overrides the default. Safe reload audits first and sends commands only for confirmed missing profile items; `//am stagger` governs separate same-PC one-addon IPC operations. These existing protections must remain.
+
+**Implementation:**
+- Default `delay_seconds=0`; old saved `delay=1` or other values stay active until user deliberately changes them (`//am delay 0`).
+- `//am delay <addon> <0..10>` defines a start offset, in seconds from the beginning of load dispatch, for one addon. `//am delay <addon> off` clears it. `//am delay list` (and bare `//am delay`) reports settings. Overrides are canonical, global per installation, and persist as sorted `delay_addon_<name>=<seconds>` entries in `AddonManager/data/options.txt`, separate from membership files.
+- New pure `am_schedule.lua` builds a stable ordered timeline. Ordinary requests dispatch in profile order at zero gap, or at their legacy global spacing if configured. Specially delayed requests use their own offsets and never delay normal requests. Equal offsets preserve relative profile order. Unloads retain the global spacing but ignore per-addon *load* offsets.
+- Dispatch waits only for positive differences between scheduled offsets. Existing optional 3-second fresh-login initial delay and 3-second post-final-dispatch audit settling interval remain. Completion means requests dispatched, not addon initialization success. If logout, restart, or another queue invalidates the generation while waiting, the pending load does not dispatch and the post-queue callback does not run.
+- No changes to safe-reload audit capture, fail-closed handling, profiles, IPC protocol, or `//am stagger` behavior.
+
+**Automated checks:**
+- [x] Lua 5.1 parsing for all addon modules and smoke tests.
+- [x] Pure schedule test: zero-gap order; 0.5s and 2s offsets; two equal offsets; legacy spacing; unload unaffected; empty list.
+- [x] Integrated mocked Windower profile: existing previously saved spacing preserved; offsets written to `options.txt`; plain load requests sent in scheduled order; offsets removable; zero spacing produces no sleeps; legacy spacing remains available.
+- [x] Simulated logout during a delayed wait prevents pending requests from executing.
+- [x] Simulated fresh login waits for final offset *and then* the post-dispatch three-second settling period before issuing verification.
+- [x] Existing simulated same-client safe-reload, Logger/console capture, and three-client IPC regressions retained.
+
+**In-game tests (pending):**
+1. Back up the known-working dev.8 `AddonManager/` and **preserve its entire `data/` folder**. Install the full dev.9 testing package, including `AddonManager.lua`, `am_cluster.lua`, `am_console.lua`, `am_schedule.lua`, README, WORKFLOW.md, and TESTING.md. A missing `am_schedule.lua` would prevent addon startup.
+2. On a character, run `//am delay` to inspect the existing saved spacing. To opt into the desired immediate behavior, run `//am delay 0`. Run `//am delay list`; expected zero ordinary gap and no special entries unless previously configured.
+3. Run `//am apply` in a safe area or test actual character login. Watch for ordinary loads being requested together without one-second pauses; distinguish dispatch from initialization.
+4. Configure a harmless addon already included in the profile (e.g. `//am delay gilfinder 2` if GilFinder is healthy). Reload AddonManager and verify its **audit-first** reconciliation remains no-op if all addons are running. For testing the timing itself, temporarily unload the selected addon and then `//am restart`, or use an explicitly requested profile batch. Confirm only the missing addon is dispatched after its offset.
+5. Mix ordinary and delayed addons in a profile, verifying the delayed entry does **not** block normal entries even if listed earlier.
+6. Use `//am delay gilfinder off` and verify normal timing returns; after manager restart settings persist. Test `//am delay 1` to preserve legacy spacing if desired, then restore `//am delay 0`.
+7. If testing during logout or character switch, ensure outstanding delayed loads are canceled; do not change characters in the middle of a critical interaction just to provoke cancellation.
+8. Confirm the existing console capture still uses readable start/end markers, fails closed on unreliable evidence, and `//am stagger` still controls separate same-PC commands.
+
+**Known limitations:** A fixed delay cannot prove a prerequisite addon has finished initializing. Timed requests are dispatched sequentially in one coroutine by scheduled offset, not in parallel OS processes. Automatic console auditing remains a separate, previously live-tested subsystem. No live dev.9 success is claimed.
+
+**Development register:** Code, tests, README and this cumulative test entry committed on `dev/addonmanager-v0.5-zero-default-delays`; use the final GitHub Actions run and SHA at delivery. Do not merge to main before live feedback. All earlier testing history follows unchanged.
+
+---
+
+# PREVIOUS TESTING — AddonManager
+
 **Branch:** `fix/addonmanager-audit-sequencing-20261022`
 **Version:** 0.5.0-dev.8
 **Date:** 2026-10-22
