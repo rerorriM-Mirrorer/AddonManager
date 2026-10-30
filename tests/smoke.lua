@@ -415,6 +415,30 @@ assert(timed_loads[1][1] == 'lua load enemybar2' and
     'cancellation changed immediate addon order')
 windower.send_command, coroutine.sleep = old_send, old_sleep
 am('delay', 'barfiller', 'off')
+
+-- A fresh-login post-queue audit must wait until the final delayed request
+-- has been dispatched, then retain the established 3-second settle interval.
+am('add', 'Cioara', 'BarFiller')
+am('delay', 'barfiller', '2')
+elapsed, timed_loads = 0, {}
+local activity = {}
+coroutine.sleep = function(seconds) elapsed = elapsed + (seconds or 0) end
+windower.send_command = function(command)
+    if command:find('^lua load ') or command == 'lua list' then
+        activity[#activity + 1] = {command, elapsed}
+    end
+    return old_send(command)
+end
+events.login('Cioara')
+local last_load, audit_at
+for _, action in ipairs(activity) do
+    if action[1]:find('^lua load ') then last_load = action[2] end
+    if action[1] == 'lua list' then audit_at = action[2] end
+end
+assert(last_load and audit_at and audit_at >= last_load + 3,
+    'post-login verification ran before the last delayed load and settling period')
+windower.send_command, coroutine.sleep = old_send, old_sleep
+am('delay', 'barfiller', 'off')
 am('unload', 'manager')
 assert(count_command('lua unload AddonManager') >= 1, 'explicit manager unload missing')
 print('AddonManager mock smoke test: PASS (' .. #commands .. ' Windower commands)')
