@@ -7,7 +7,7 @@
 - **Version:** `0.5.0-dev.10`; Windower 4 / Lua 5.1; same-PC IPC `AMALL2`
 - **Source checkpoint:** v0.5.0-dev.9 branch `dev/addonmanager-v0.5-zero-default-delays`, commit `d15ef226f726a21b4e73ecf36c97c861ddc27aac`. Retains zero default ordinary load gap, per-addon load offsets, safe reload, and console capture.
 - **Most recent user-confirmed live behavior:** v0.5.0-dev.8 safe reload success, reported 2026-10-22. Dev.9 timing and dev.10 post-action IPC checks have **not** received confirmed in-game testing.
-- **Automated checks:** code and mock Windower tests added/updated; GitHub Actions result must be checked before claiming a test pass. No local FFXI/Windower runtime available in this development environment.
+- **Automated checks:** GitHub Actions `Lua 5.1 checks` run [41483279064](https://github.com/rerorriM-Mirrorer/AddonManager/actions/runs/41483279064), source commit `5f098b391eb9462129e2bcc0de0b2bfd0117e97e`: Lua 5.1 syntax step, mocked Windower smoke, three-client IPC, console capture, load scheduler, and installable ZIP build/upload **all passed**. This is CI simulation, not Windows/Windower/FFXI gameplay.
 - **Remaining concern:** a fresh post-action `lua list` proves presence after dispatch, **not** execution of the full reload lifecycle or every addon's initialization code. Unavailable console logging, interleaving, and transient list races remain live checks.
 - **Next:** run the same-PC client test matrix below, collect one complete console listing per recipient and the initiator's final summary, then decide if strict reload-transition evidence is necessary.
 
@@ -25,10 +25,11 @@
 - Synced root `WORKFLOW.md` with current NPCMirror canonical shared practices, including the current package layout.
 
 **Automated/mock checks to verify on the working branch:**
-- [ ] Lua 5.1 syntax check for all addon modules and test programs through `.github/workflows/lua-check.yml`.
-- [ ] Three-client IPC: ordered dispatch; positive acknowledgments; a valid absent result followed by continued dispatch; inconclusive result counted; missing ACK times out without retry; older IPC protocol ignored.
-- [ ] Integrated mock Windower console: target appears after request; target absent in valid list; unavailable console output remains inconclusive.
-- [ ] Retain previous safe-reload, import, audit, scheduling, and cancellation regressions. No changes to `am_console.lua` or `am_schedule.lua`.
+- [x] Lua 5.1 syntax check for all addon modules and test programs through `.github/workflows/lua-check.yml`.
+- [x] Three-client IPC: ordered dispatch; positive acknowledgments; a valid absent result followed by continued dispatch; inconclusive result counted; missing ACK times out without retry; older IPC protocol ignored.
+- [x] Integrated mock Windower console: target appears after request; target absent in valid list; unavailable console output remains inconclusive.
+- [x] Existing safe-reload, import, audit, scheduling, and cancellation mock regressions pass. No changes to `am_console.lua` or `am_schedule.lua`.
+- **CI source & evidence:** `5f098b391eb9462129e2bcc0de0b2bfd0117e97e`, [run 41483279064](https://github.com/rerorriM-Mirrorer/AddonManager/actions/runs/41483279064), job `125406879035`. Output included `AddonManager mock smoke test: PASS (69 Windower commands)`, `multi-client IPC smoke: PASS (16 simulated addon commands)`, `console capture: PASS`, and `load schedule: PASS`. No FFXI runtime was executed.
 
 **Live FFXI checks (pending):**
 1. Back up the existing `Windower/addons/AddonManager/` and retain its `data/` unmodified. Install the complete dev.10 addon folder (`AddonManager.lua`, `am_cluster.lua`, `am_console.lua`, `am_schedule.lua`, README, WORKFLOW, TESTING) on all same-PC clients.
@@ -39,7 +40,7 @@
 6. Confirm `//am verify off` disables only automatic startup audits, not the cross-client checks. Run `//am delay list` and verify saved per-addon offsets from dev.9 are preserved. Test `//am all cancel` while discovering.
 7. Review help via bare `//am` and `//am help`, check consistent headings, color fragments, usage strings, and no duplicated console help.
 
-**Publication:** Working branch and associated commits only; do not merge into `main` before live confirmation. GitHub Actions result, final branch head, and any user-supplied logs belong in the next status update.
+**Publication:** Working branch with draft [PR #1](https://github.com/rerorriM-Mirrorer/AddonManager/pull/1) targeted to dev.9 (not main). Do not merge before live confirmation. The historical source baseline is dev.9 `d15ef226`; code/test/README/WORKFLOW commits on this branch precede the documentation-only CI-status update. GitHub Actions run and live acceptance are tracked above; final published branch head must be verified at delivery.
 
 ---
 
