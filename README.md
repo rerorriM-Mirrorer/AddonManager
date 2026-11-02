@@ -1,7 +1,7 @@
 # AddonManager
 
 **Author:** Max and A
-**Development version:** 0.5.0-dev.9
+**Development version:** 0.5.0-dev.10
 **Windower:** FFXI / Windower 4 (Lua 5.1)
 **Commands:** //am
 
@@ -9,12 +9,12 @@ Manage **Lua addons** with persistent global and per-character lists. Inspired b
 
 ## Installation
 
-1. **Back up** your working Windower/addons/AddonToggle folder, especially `data/profiles/`, `data/options.txt`, and any imported lists.
-2. Create Windower/addons/AddonManager/ and place **AddonManager.lua, am_cluster.lua, am_console.lua, am_schedule.lua, and README.md** there. Copy the **existing AddonToggle/data/** folder into **AddonManager/data/** to retain every profile and option.
+1. **Back up** the current Windower/addons/AddonManager folder (or original AddonToggle installation), especially its `data/profiles/`, `data/options.txt`, and imported lists.
+2. Install the updated **AddonManager.lua, am_cluster.lua, am_console.lua, am_schedule.lua, README.md, WORKFLOW.md and TESTING.md** into Windower/addons/AddonManager/. **Preserve the existing AddonManager/data/ folder**. For a first-time upgrade from AddonToggle only, copy its old `data/` into `AddonManager/data/`.
 3. Disable the original AddonToggle and Windower plugin_manager in startup configuration; do not run two profile managers simultaneously. Keep the old AddonToggle folder as an offline backup.
 4. Load from the console with `lua load AddonManager` or enable the new folder through the Windower launcher. Type `//am help`.
 5. Replace references to old `//pm` and `//at` commands in macros and scripts; **neither alias is registered**. The BarFiller/EquipViewer pair-toggle has been retired.
-6. **v0.5.0-dev.9 is a development build.** Its new timing scheduler is simulated-tested but has not been tried in FFXI. The dev.8 safe-reload design is live-confirmed; preserve the working install and its data directory.
+6. **v0.5.0-dev.10 is an unverified development build.** It adds per-client verification after cross-client load/reload requests and standardized chat help. Install this build on **every same-PC client** participating in `//am all`; the new IPC protocol intentionally does not treat older dispatch-only acknowledgments as evidence. Keep the previously working installation for rollback. Dev.8 safe reload has live user confirmation; dev.9 timing and dev.10 IPC verification still need in-game checks.
 
 AddonManager itself should be started through Windower, so that it receives actual character login events. Other addon startup arrangements may remain independent.
 
@@ -31,8 +31,8 @@ AddonManager itself should be started through Windower, so that it receives actu
 | //am load all | Load the combined global and current-character lists (same as //am apply) |
 | //am unload all | Unload the combined global and current-character lists |
 | //am apply | Explicitly load global + current character (unfiltered/forced) |
-| //am all load ADDON | Load one named addon, one same-PC client at a time |
-| //am all reload ADDON | Reload one named addon, one same-PC client at a time |
+| //am all load ADDON | Stagger loads; check each client's fresh loaded-addon list |
+| //am all reload ADDON | Stagger reloads; check each client's loaded state afterward |
 | //am all cancel | Cancel the current cross-client batch |
 | //am stagger [seconds] | Read or change cross-client gap (default 2s, 0.1–10) |
 | //am scan [all] | List installed Lua addons (not currently running addons) |
@@ -72,7 +72,11 @@ New installations dispatch ordinary profile load requests with **zero deliberate
 
 Run `//am all load trust` or `//am all reload xivcrossbar` **from one Windower client**. Only other *logged-in* clients on the **same computer** running this AddonManager version can answer its IPC discovery; a separately running laptop is not reached. Participants are sorted alphabetically, with the initiating character last. Commands issue sequentially with a default **two-second gap between acknowledgements**. Change it from the initiating client with `//am stagger 2.5`; this option persists in AddonManager/data/options.txt.
 
-The addon validates actual installed addon folders before dispatch. Only `load` and `reload` of a specific addon are allowed; management addons are protected. `//am all reload` **without an addon** deliberately displays usage rather than reloading 50+ addons at once. `//am all cancel` stops a pending batch. A peer that refuses a request or fails to acknowledge it causes the batch to stop; **there is no automatic retry**. Acknowledgements confirm command dispatch, *not successful addon initialization*. Do not rebroadcast the same command using Send, or each client may try to start a separate batch.
+The addon validates actual installed addon folders before dispatch. Only `load` and `reload` of a specific addon are allowed; management addons are protected. `//am all reload` **without an addon** deliberately displays usage rather than reloading 50+ addons at once. `//am all cancel` stops a pending batch. A peer that refuses a request or never acknowledges verification stops the batch after a timeout; **there is no automatic retry**. Do not rebroadcast the same command using Send, or each client may try to start a separate batch.
+
+**New in dev.10:** After dispatch, each client waits briefly and obtains its *own fresh* `lua list` snapshot through the existing `//am capture console|chat` pipeline. Presence of both AddonManager and the requested addon results in **loaded afterward**; a valid complete snapshot missing the requested addon results in **absent**; missing, corrupt, interleaved, or unmappable evidence results in **inconclusive**. The initiator receives one result per client and a count summary. Absent/inconclusive checks do **not** automatically retry a load; the remaining clients still run. A client that never replies causes the batch to stop. The default two-second stagger begins only after the previous client's check completes.
+
+**Verification scope:** This proves the requested addon appears in LuaCore's loaded-addon list *after* the action. It does **not** prove all initialization hooks ran correctly, and for `reload`, an addon already present before the request may remain listed even if the reload failed. For strict proof of a reload transition, an additional observed unload/reload lifecycle or opt-in addon cooperation would be needed. The new results deliberately say **loaded after reload**, not **reload fully verified**. The `//am verify off` setting only disables extra automatic startup audits; it does not disable cross-client acknowledgment checks. If `console.log` is unavailable, enable `console_log 1` using your existing setup or explicitly choose `//am capture chat` on that client; do not treat an inconclusive result as failure or success.
 
 `//am delay` controls **within-client** profile timing, including individual addon offsets. `//am stagger` controls **between-client** one-addon operations and is unchanged.
 
@@ -140,7 +144,7 @@ Run //am import file Cioara to read plain addon names (one per line, optional # 
 - Individual //am load and //am unload commands act on the named profile **alone**.
 - //am unload global can unload an addon also referenced by a character profile; this is a command, not a reference-counted ownership model. Self-unloading of AddonManager and plugin_manager through list operations is blocked.
 - Logout cancels queued work; **this version does not automatically unload already running addons when a character logs out**. Be cautious when switching characters in a single client.
-- Status tracks **requested** loads and unloads, never claims confirmed runtime state. Use the Windower //lua list command to verify.
+- Status tracks **requested** loads and unloads for profile operations (not confirmed completion). Only `//am all` has the new per-client post-action observed-state check; `//am status` does not turn ordinary profile requests into confirmations.
 - Installed-addon scan checks for a folder containing a same-named Lua entrypoint and does not reveal the runtime list.
 - Concurrent writes by multiple clients to the **same profile file** are not transactionally protected yet. Edit from one client at a time.
 - No priority cycle or character-specific exclusions yet.
@@ -162,6 +166,7 @@ Run //am import file Cioara to read plain addon names (one per line, optional # 
 - **2026-10-22 / Batch 5g (v0.5.0-dev.7):** Short human-readable console audit start/end messages tagged by character and session check number; source format compared against user-supplied real console.log; parsing safety and previous tests preserved.
 - **2026-10-22 / Batch 5h (v0.5.0-dev.8):** Fix nondeterministic Windower ordering of the begin/list/end console commands by advancing only after actual file-log observation. Live Killala and Franklet successes in dev.7 retained; dev.8 staging awaits live verification.
 - **2026-10-30 / Batch 5i (v0.5.0-dev.9):** New installs load with zero gap by default; saved per-addon start offsets delay only selected addons. Preserve old saved spacing, safe-reload audit-first behavior, cancellations, and independent cross-client staggering. Lua 5.1 simulated tests, live test pending.
+- **2026-11-02 / Batch 5j (v0.5.0-dev.10):** Same-PC cross-client load/reload operations now wait for each client's own fresh loaded-addon snapshot instead of dispatch-only acknowledgment. Per-client present/absent/inconclusive results, timeout and no-retry behavior, BattleStations-inspired grouped chat help and consistent message colors. New protocol isolates older clients; full addon set, saved delay settings and audit code are preserved. Simulation/CI and live acceptance are tracked in TESTING.md.
 
 ## Attribution
 

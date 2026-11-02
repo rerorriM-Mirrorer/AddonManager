@@ -1,8 +1,8 @@
 -- IPC coordinator for //am all <load|reload> <addon>.
 -- Same-computer Windower IPC, patterned after SlowEnter's acknowledged roster.
--- "done" means the lua command was dispatched, NOT that the addon finished loading.
+-- Completion is a fresh per-client loaded-addon observation, not just dispatch.
 return function(api)
-    local prefix, active, serial, gap = 'AMALL1', nil, 0, 2
+    local prefix, active, serial, gap = 'AMALL2', nil, 0, 2
     local seen = {}
     local dispatch
 
@@ -44,14 +44,51 @@ return function(api)
         api.message('All-client batch stopped: ' .. reason, 123)
     end
 
-    local function complete(s, who)
+    -- A fresh, marker-bounded lua-list check on the actual client is the
+    -- acknowledgment. This proves presence afterward, not that an addon's
+    -- own initialization code completed; reloads cannot prove restart from
+    -- presence alone.
+    local function verify(s, callback)
+        local responded = false
+        local ok, err = pcall(api.verify, s.verb, s.addon, function(outcome, detail)
+            if responded then return end
+            responded = true
+            if active == s then callback(outcome, detail) end
+        end)
+        if not ok and not responded and active == s then
+            callback('inconclusive', 'verification error: ' .. tostring(err))
+        end
+    end
+
+    local function complete(s, who, outcome, detail)
         if active ~= s or s.phase ~= 'waiting' or s.current ~= who then return end
+        if outcome ~= 'present' and outcome ~= 'absent' then outcome = 'inconclusive' end
+        s.results[who] = outcome
         s.phase = 'gap'
-        api.message(who .. ': ' .. s.verb .. ' ' .. s.addon .. ' dispatched (unverified).')
+        if outcome == 'present' then
+            api.message(who .. ': ' .. s.addon .. ' loaded after ' ..
+                s.verb .. ' (confirmed by fresh lua list).')
+        elseif outcome == 'absent' then
+            api.message(who .. ': ' .. s.addon .. ' absent after ' ..
+                s.verb .. ' (fresh lua list).', 123)
+        else
+            api.message(who .. ': ' .. s.addon ..
+                ' not verified after ' .. s.verb ..
+                (detail and ' (' .. detail .. ')' or '') .. '.', 123)
+        end
         if s.index == #s.order then
+            local present, absent, inconclusive = 0, 0, 0
+            for _, member in ipairs(s.order) do
+                local result = s.results[member]
+                if result == 'present' then present = present + 1
+                elseif result == 'absent' then absent = absent + 1
+                else inconclusive = inconclusive + 1 end
+            end
             send('*', 'finish', s.token)
             active = nil
-            api.message('All-client requests dispatched to ' .. #s.order .. ' client(s).')
+            api.message(('Batch complete: %d loaded afterward; %d absent; %d inconclusive (%d client(s)).'):format(
+                present, absent, inconclusive, #s.order),
+                absent + inconclusive > 0 and 123 or 207)
         else
             later(s, s.gap, function() dispatch(s) end)
         end
@@ -64,14 +101,16 @@ return function(api)
         s.current, s.phase = who, 'waiting'
         if who == s.me then
             local ok, reason = api.run(s.verb, s.addon)
-            if ok then complete(s, who) else cancel(reason or 'local dispatch failed') end
+            if ok then
+                verify(s, function(outcome, detail) complete(s, who, outcome, detail) end)
+            else cancel(reason or 'local dispatch failed') end
         else
             send(who, 'run', s.token, s.addon)
         end
         local index = s.index
-        later(s, 6, function()
+        later(s, 20, function()
             if s.phase == 'waiting' and s.index == index then
-                cancel(who .. ': no acknowledgement; no retry issued')
+                cancel(who .. ': no verification response; no retry issued')
             end
         end)
     end
@@ -90,7 +129,8 @@ return function(api)
         local token = me .. '-' .. os.time() .. '-' .. serial .. '-' ..
             math.floor(os.clock() * 100000)
         local s = {me = me, leader = me, verb = verb, addon = addon,
-            token = token, members = {}, index = 0, phase = 'discovering', gap = gap}
+            token = token, members = {}, results = {}, index = 0,
+            phase = 'discovering', gap = gap}
         active = s
         mark_seen(token)
         send('*', 'probe', token, verb .. ':' .. addon)
@@ -104,7 +144,7 @@ return function(api)
                 ' (' .. s.gap .. 's between dispatches).')
             dispatch(s)
         end)
-        later(s, 90, function() cancel('batch expired') end)
+        later(s, 240, function() cancel('batch expired') end)
     end
 
     local function receive(message)
@@ -137,7 +177,7 @@ return function(api)
                 token = token, phase = 'ready'}
             active = s
             send(from, 'ready', token)
-            later(s, 90, function() cancel('leader timed out') end)
+            later(s, 240, function() cancel('leader timed out') end)
             return
         end
         if not s or s.token ~= token then return end
@@ -149,8 +189,8 @@ return function(api)
                 cancel(from .. ': not available (' .. verb .. ')')
             elseif verb == 'abort' and s.members[from] then
                 cancel(from .. ': cancelled locally')
-            elseif verb == 'done' and s.members[from] then
-                complete(s, from)
+            elseif verb == 'checked' and s.members[from] then
+                complete(s, from, value)
             end
         elseif from == s.leader then
             if verb == 'cancel' or verb == 'finish' then
@@ -161,8 +201,19 @@ return function(api)
                 s.phase = 'running'
                 local ok, reason = api.run(s.verb, s.addon)
                 if ok then
-                    s.phase = 'done'
-                    send(s.leader, 'done', token)
+                    s.phase = 'checking'
+                    verify(s, function(outcome, detail)
+                        if active ~= s then return end
+                        s.phase = 'done'
+                        if outcome ~= 'present' and outcome ~= 'absent' then
+                            outcome = 'inconclusive'
+                        end
+                        send(s.leader, 'checked', token, outcome)
+                        if outcome ~= 'present' then
+                            api.message('Local ' .. s.addon .. ' ' .. s.verb ..
+                                ' verification: ' .. (detail or outcome), 123)
+                        end
+                    end)
                 else
                     active = nil
                     send(s.leader, 'abort', token)

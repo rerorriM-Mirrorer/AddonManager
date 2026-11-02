@@ -6,6 +6,7 @@ local simulate_list = true
 local reload_list = nil -- Override simulated lua list for safe-reload tests
 local logger_emulation = 'off' -- Simulated Logger disk output, distinct from incoming text
 local console_emulation = false -- Simulate native console.log independently of chat
+local console_entries = {'Equipviewer', 'EnemyBar2', 'AddonManager'}
 
 package.preload['chat'] = function()
     string.color = function(self) return self end
@@ -29,8 +30,10 @@ windower = {
             if command:find('^console_echo ') then
                 log:write(command:match('^console_echo "([^"]+)"') or 'bad_marker', '\n')
             elseif command == 'lua list console' then
-                log:write('Currently loaded addons:\n  Equipviewer\n  EnemyBar2\n',
-                    '  AddonManager\n')
+                log:write('Currently loaded addons:\n')
+                for _, entry in ipairs(console_entries) do
+                    log:write('  ', entry, '\n')
+                end
             end
             log:close()
         end
@@ -439,6 +442,35 @@ assert(last_load and audit_at and audit_at >= last_load + 3,
     'post-login verification ran before the last delayed load and settling period')
 windower.send_command, coroutine.sleep = old_send, old_sleep
 am('delay', 'barfiller', 'off')
+-- Exercise the real per-client verification pipeline in a mocked Windower.
+-- Verify fresh presence, a complete list without target, and no capture output.
+file('tmp_windower/console.log', '')
+console_emulation = true
+windower.send_ipc_message = function() end
+am('capture', 'console')
+local function has_chat(fragment, from)
+    for i = from, #chats do
+        if chats[i]:find(fragment, 1, true) then return true end
+    end
+    return false
+end
+local from = #chats + 1
+am('all', 'load', 'equipviewer')
+assert(has_chat('equipviewer loaded after load (confirmed by fresh lua list)', from),
+    'client verification failed to confirm fresh observed loaded state')
+
+console_entries = {'EnemyBar2', 'AddonManager'}
+from = #chats + 1
+am('all', 'reload', 'equipviewer')
+assert(has_chat('equipviewer absent after reload (fresh lua list)', from),
+    'a complete list missing the target was incorrectly treated as success')
+
+console_emulation = false
+from = #chats + 1
+am('all', 'load', 'equipviewer')
+assert(has_chat('equipviewer not verified after load', from),
+    'incomplete console output must report inconclusive, not success')
+
 am('unload', 'manager')
 assert(count_command('lua unload AddonManager') >= 1, 'explicit manager unload missing')
 print('AddonManager mock smoke test: PASS (' .. #commands .. ' Windower commands)')

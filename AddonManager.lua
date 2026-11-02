@@ -4,7 +4,7 @@
 -- No code copied from the original plugin_manager; see README for historical inspiration.
 _addon.name = 'AddonManager'
 _addon.author = 'Max and A'
-_addon.version = '0.5.0-dev.9'
+_addon.version = '0.5.0-dev.10'
 _addon.commands = {'am'}
 
 require('chat')
@@ -29,8 +29,12 @@ local requested = {} -- This is intent, NOT a confirmed list of loaded addons.
 local begin_audit -- Assigned below; startup queue callback uses it after source initialization.
 local cluster
 
+-- BattleStations-style chat fragments: heading 167, divider 140,
+-- syntax 207, arrows 200, description 0 (neutral). All normal feedback
+-- stays in game chat rather than producing a duplicate console message.
 local function msg(s, color)
-    windower.add_to_chat(0, ('[AM] '):color(167) .. tostring(s):color(color or 207))
+    windower.add_to_chat(0, ('[AM]'):color(167) ..
+        (' | '):color(140) .. tostring(s):color(color or 0))
 end
 
 local function trim(s)
@@ -289,40 +293,51 @@ local function apply_current(start_after, check_on_startup)
 end
 
 local function print_help()
-    msg('AddonManager / Profile Manager v' .. _addon.version, 167)
+    windower.add_to_chat(0, ('--- '):color(140) ..
+        ('AddonManager  v' .. _addon.version):color(167) ..
+        (' ---'):color(140))
     local lines = {
+        {'Profiles'},
         {'//am list [global|character]', 'Show saved profile'},
         {'//am add [global|character] <addon>', 'Save an entry; do not load'},
         {'//am remove [global|character] <addon>', 'Remove entry; do not unload'},
         {'//am load [global|character]', 'Load a saved list in this client'},
-        {'//am unload [global|character|all]', 'Unload listed addons only'},
+        {'//am unload [global|character|all]', 'Unload a saved list in this client'},
         {'//am apply', 'Load global + current character'},
-        {'//am all load <addon>', 'Stagger load across same-PC clients'},
-        {'//am all reload <addon>', 'Stagger reload across same-PC clients'},
-        {'//am all cancel', 'Cancel a pending client batch'},
-        {'//am stagger [seconds]', 'Cross-client spacing (default 2s)'},
-        {'//am scan [all]', 'Discover installed Lua addons'},
-        {'//am import loaded [profile]', 'Capture extras beyond global (or full global)'},
-        {'//am import init [profile]', 'Preview imports from scripts/init.txt'},
-        {'//am import legacy [profile]', 'Preview original plugin_manager XML'},
+        {'Across clients (same PC)'},
+        {'//am all load <addon>', 'Stagger loads; confirm each client afterward'},
+        {'//am all reload <addon>', 'Stagger reloads; confirm loaded afterward'},
+        {'//am all cancel', 'Stop pending cross-client requests'},
+        {'//am stagger [seconds]', 'Between-client spacing (default 2s)'},
+        {'Discovery / imports'},
+        {'//am scan [all]', 'List installed Lua addons'},
+        {'//am import loaded [profile]', 'Preview loaded addons beyond global'},
+        {'//am import init [profile]', 'Preview scripts/init.txt imports'},
+        {'//am import legacy [profile]', 'Preview legacy XML profile'},
         {'//am import file [profile]', 'Preview data/import.txt'},
-        {'//am import confirm|cancel', 'Commit or discard the preview'},
-        {'//am prune [character]', 'Preview profile entries already in global'},
-        {'//am prune confirm|cancel', 'Save cleanup or discard preview'},
-        {'//am delay [seconds]', 'Global load spacing (default 0; 0..10)'},
-        {'//am delay <addon> <seconds|off>', 'Addon start offset, independent of others'},
-        {'//am delay list', 'Show addon-specific load offsets'},
-        {'//am startup on|off', 'Automatic profile load after login'},
-        {'//am audit', 'Read-only check against lua list'},
-        {'//am capture [console|chat]', 'Select audit output (default console)'},
-        {'//am verify on|off', 'Startup audit and discrepancy alerts'},
-        {'//am status', 'Current character, profiles, queue info'},
-        {'//am restart', 'Reload the profile manager'},
-        {'//am unload manager', 'Unload the profile manager itself'},
+        {'//am import confirm|cancel', 'Save or discard import preview'},
+        {'//am prune [character]', 'Preview entries already in global'},
+        {'//am prune confirm|cancel', 'Save or discard prune preview'},
+        {'Settings / diagnostics'},
+        {'//am delay [seconds|list]', 'Global load gap (default 0) or list offsets'},
+        {'//am delay <addon> <seconds|off>', 'Independent addon load offset'},
+        {'//am startup on|off', 'Auto-load profile on character login'},
+        {'//am audit', 'Read-only loaded-addon snapshot'},
+        {'//am capture [console|chat]', 'Select snapshot output source'},
+        {'//am verify on|off', 'Toggle startup audit (cross-client checks stay on)'},
+        {'//am status', 'Show settings and cross-client status'},
+        {'//am restart', 'Reload AddonManager itself'},
+        {'//am unload manager', 'Unload AddonManager itself'},
     }
     for _, line in ipairs(lines) do
-        windower.add_to_chat(0, ('  //am'):color(200) ..
-            line[1]:sub(5):color(207) .. (' -> '):color(200) .. line[2]:color(0))
+        if not line[2] then
+            windower.add_to_chat(0, ('-- '):color(140) ..
+                line[1]:color(167) .. (' --'):color(140))
+        else
+            windower.add_to_chat(0, ('  //am'):color(200) ..
+                line[1]:sub(5):color(207) ..
+                (' -> '):color(200) .. line[2]:color(0))
+        end
     end
 end
 
@@ -504,7 +519,7 @@ local function finish_loaded_capture(capture)
         if entries then
             capture.started, capture.lines = true, entries
             capture.snapshot_source = 'console.log marker bounded'
-            if console_reason and console_reason > 0 then
+            if console_reason and console_reason > 0 and capture.kind ~= 'verify' then
                 msg(('Console audit: ignored %d unrelated Lua error line(s).'):format(
                     console_reason))
             end
@@ -512,7 +527,7 @@ local function finish_loaded_capture(capture)
     elseif not capture.started or #capture.lines == 0 then
         local recovered
         recovered, logger_reason = logger_fallback(capture)
-        if recovered then
+        if recovered and capture.kind ~= 'verify' then
             msg(('Recovered %d addon names from new Logger text.'):format(#capture.lines))
         end
     end
@@ -527,7 +542,9 @@ local function finish_loaded_capture(capture)
             detail = 'incoming text: ' .. live_reason ..
                 '; Logger: ' .. (logger_reason or 'not available')
         end
-        if capture.kind == 'audit' then
+        if capture.kind == 'verify' then
+            if capture.done then capture.done('inconclusive', detail) end
+        elseif capture.kind == 'audit' then
             msg('Audit inconclusive (' .. detail .. '). No changes made.', 123)
             if capture.done then capture.done(false) end
         else
@@ -538,6 +555,33 @@ local function finish_loaded_capture(capture)
     if capture.kind == 'audit' then
         local ok, missing = finish_audit(capture)
         if capture.done then capture.done(ok, missing) end
+        return
+    end
+    if capture.kind == 'verify' then
+        -- A positive, fresh local snapshot proves presence after dispatch,
+        -- but cannot prove every initialization hook (or a reload transition).
+        local installed, scanned = installed_lookup()
+        if not scanned then
+            capture.done('inconclusive', 'installed-addon scan unavailable')
+            return
+        end
+        local index = installed_display_index(installed)
+        local observed, unresolved = {}, 0
+        for _, display in ipairs(capture.lines) do
+            local addon = index[canonical_key(display)]
+            if addon then observed[addon] = true else unresolved = unresolved + 1 end
+        end
+        if not observed.addonmanager then
+            capture.done('inconclusive', 'AddonManager missing from snapshot')
+        elseif observed[capture.addon] then
+            requested[capture.addon] = capture.action .. ' observed loaded afterward'
+            capture.done('present')
+        elseif unresolved > 0 then
+            capture.done('inconclusive', 'unresolved addon display names')
+        else
+            requested[capture.addon] = capture.action .. ' requested; target absent afterward'
+            capture.done('absent', 'target absent from fresh loaded list')
+        end
         return
     end
 
@@ -588,9 +632,13 @@ local function issue_loaded_list(capture)
     if capture.mode == 'console' then
         local snapshot, err = console_capture.begin(windower.windower_path, current_profile())
         if not snapshot then
-            msg('Quiet audit unavailable: ' .. tostring(err) ..
-                '. No load requests issued.', 123)
-            if capture.done then capture.done(false) end
+            if capture.kind == 'verify' then
+                capture.done('inconclusive', tostring(err))
+            else
+                msg('Quiet audit unavailable: ' .. tostring(err) ..
+                    '. No load requests issued.', 123)
+                if capture.done then capture.done(false) end
+            end
             return false
         end
         capture.console = snapshot
@@ -666,6 +714,39 @@ begin_audit = function(source, done)
     end
     return issue_loaded_list({kind = 'audit', source = source, character = who,
         started = false, finished = false, lines = {}, done = done})
+end
+
+-- A cross-client request must be checked on the receiving client, not
+-- inferred from the IPC dispatch ACK. Allow the native Lua command a small
+-- settling interval, then use the existing fresh, marker-bounded capture.
+-- If a manual/startup audit is underway, wait briefly rather than overwrite it.
+local function verify_cluster_action(action, addon, done)
+    local who = current_profile()
+    if not who then done('inconclusive', 'not logged in'); return end
+    coroutine.schedule(function()
+        coroutine.sleep(0.75)
+        for _ = 1, 20 do
+            if current_profile() ~= who then
+                done('inconclusive', 'character changed')
+                return
+            end
+            if not running_capture then break end
+            coroutine.sleep(0.25)
+        end
+        if running_capture then
+            done('inconclusive', 'another addon-list capture is active')
+            return
+        end
+        issue_loaded_list({kind = 'verify', character = who,
+            action = action, addon = addon, started = false,
+            finished = false, lines = {}, done = function(result, detail)
+                if current_profile() ~= who then
+                    done('inconclusive', 'character changed')
+                else
+                    done(result, detail)
+                end
+            end})
+    end, 0)
 end
 
 -- A live addon reload is NOT a character login. Before issuing any saved
@@ -890,9 +971,10 @@ cluster = require('am_cluster')({
         if not scanned or not installed then return false, 'Missing addon: ' .. addon end
         local ok, err = pcall(windower.send_command, 'lua ' .. action .. ' ' .. addon)
         if not ok then return false, tostring(err) end
-        requested[addon] = action .. ' requested (unverified)'
+        requested[addon] = action .. ' dispatched; awaiting local observation'
         return true
     end,
+    verify = verify_cluster_action,
 })
 
 local function dispatch(...)
@@ -1025,7 +1107,7 @@ local function dispatch(...)
                 local count = 0
                 for _ in pairs(requested) do count = count + 1 end
                 return count
-            end)()) .. ' (unverified)')
+            end)()) .. ' (requests are not necessarily confirmations)')
     elseif verb == 'restart' then
         generation = generation + 1
         cluster.cancel('manager restart')

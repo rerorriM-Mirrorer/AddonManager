@@ -60,6 +60,14 @@ local function clone(name, missing)
                 addon = addon, time = clock}
             return true
         end,
+        verify = function(action, addon, done)
+            client.verify_calls = (client.verify_calls or 0) + 1
+            if client.silent_verification then return end
+            later(function()
+                local result = client.verification_result or 'present'
+                done(result, result ~= 'present' and 'mock snapshot ' .. result or nil)
+            end, client.verification_delay or 0)
+        end,
     })
     clients[#clients + 1] = client
     return client
@@ -130,6 +138,55 @@ assert(#records == baseline, 'cancelled batch dispatched commands')
 cioara.controller.handle('reload')
 advance(1)
 assert(#records == baseline, 'bare reload should require an addon')
+
+-- Presence is checked by the receiving client; a peer can report a
+-- trustworthy absence while the rest of the ordered batch still runs.
+myrr.verification_result = 'absent'
+local previously = #records
+cioara.controller.handle('load', 'trust')
+advance(6)
+assert(#records == previously + 3, 'an absent peer prevented other clients loading')
+local saw_absent, saw_summary = false, false
+for _, line in ipairs(cioara.logs) do
+    if line:find('myrr: trust absent after load', 1, true) then saw_absent = true end
+    if line:find('2 loaded afterward; 1 absent', 1, true) then saw_summary = true end
+end
+assert(saw_absent and saw_summary, 'per-client absence was not reported')
+myrr.verification_result = nil
+
+-- Failed capture is not a false success. Missing completion after the
+-- verification deadline stops dispatch to later clients without retrying.
+myrr.verification_result = 'inconclusive'
+previously = #records
+cioara.controller.handle('reload', 'xivcrossbar')
+advance(6)
+assert(#records == previously + 3, 'inconclusive capture should not lose other peers')
+local saw_unknown = false
+for _, line in ipairs(cioara.logs) do
+    if line:find('1 inconclusive', 1, true) then saw_unknown = true end
+end
+assert(saw_unknown, 'inconclusive result not distinguished')
+myrr.verification_result = nil
+
+myrr.silent_verification = true
+previously = #records
+cioara.controller.handle('load', 'trust')
+advance(26)
+assert(#records == previously + 2, 'missing verification should halt before initiator')
+local timed_out = false
+for _, line in ipairs(cioara.logs) do
+    if line:find('no verification response; no retry', 1, true) then
+        timed_out = true
+    end
+end
+assert(timed_out, 'lost verification response did not time out')
+myrr.silent_verification = nil
+
+-- Prior-protocol messages must never be treated as v2 confirmations.
+local before_old = #records
+cioara.ipc('AMALL1 myrr cioara checked ignored present')
+advance(0)
+assert(#records == before_old, 'legacy acknowledgment affected dispatch')
 
 print('AddonManager multi-client IPC smoke: PASS (' ..
     #records .. ' simulated addon commands)')
