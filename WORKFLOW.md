@@ -198,11 +198,11 @@ For packet-dependent work, maintain `docs/PACKETS.md` recording:
 
    - Keep `README.md` focused on configuration and use, ending with cumulative changelog.
    - Maintain the source `README.md` at the repository root. In testing ZIPs, include its installable copy **inside the addon folder** (`AddonName/README.md`), alongside the addon code; do not duplicate it at the ZIP root.
-   - Place only the consolidated `WORKFLOW.md` and cumulative `TESTING.md` at the root of the testing ZIP, alongside the installable addon folder. Do not include retired `AGATHOS.md` or `DESIGN.md` separately.
+   - In testing ZIPs, include `WORKFLOW.md` and `TESTING.md` **inside the installable addon folder** (`AddonName/WORKFLOW.md` and `AddonName/TESTING.md`), alongside `README.md` and the addon files. For patch or test payloads without an addon folder, place both documents beside the delivered patch/test files. Do not require extra copies at the outer ZIP root, or include retired `AGATHOS.md` and `DESIGN.md` separately.
 
 - **TESTING.md**
    
-   - Maintain `TESTING.md` at the repository root as the first guide for installation, development and testing, alongside `WORKFLOW.md`. Include both documents at the root of every testing package.
+   - Maintain `TESTING.md` at the repository root as the first guide for installation, development and testing, alongside `WORKFLOW.md`. Include both with the addon or patch/test payload inside testing packages, as described above.
       - Each testing delivery should identify its batch, associated commit(s), its contents, and any installation precautions.
       - Update `TESTING.md` before delivering a new testing batch. Include current tests first, followed by previous checks and results, a delivery register, and a record of user-provided materials, observations, and requests.
       - Preserve historical information without presenting unverified reconstruction as fact. 
@@ -223,7 +223,7 @@ For packet-dependent work, maintain `docs/PACKETS.md` recording:
 
 Use the consolidated `WORKFLOW.md` maintained in the NPCMirror repository as the reference for shared practices across projects. It contains AGATHOS, DESIGN, and WORKFLOW in that order.
 
-Maintain `WORKFLOW.md` and `TESTING.md` at the root of each active development repository and testing package.
+Maintain `WORKFLOW.md` and `TESTING.md` at the root of each active development repository. In testing packages, include both documents inside the addon folder or alongside the delivered patch/test files rather than at the outer ZIP root.
 
 Review these conventions when beginning development work or preparing a new testing batch. Preserve project-specific principles, documentation, and history when adopting shared conventions. Propagate improvements deliberately, reviewing differences rather than overwriting existing material. 
 
@@ -255,3 +255,17 @@ Apply these conventions to new addons and to existing addons as they are develop
 - Keep documentation, saved-setting compatibility, and tests aligned with changes. Distinguish simulated verification from live FFXI testing.
 
 **Principle:** Make each addon feel like a natural extension of FFXI. Reuse proven patterns without adding complexity that serves no purpose.
+
+---
+
+### Final Verification & Current Development Status
+
+At the end of every coherent development or documentation delivery, complete this sequence: **review -> verify -> update status -> commit/push -> confirm the published state**.
+
+1. **Review:** Re-read the request and inspect the complete diff against the starting branch. Check for unrelated edits, incomplete work, misleading comments, and unintended changes to defaults or saved data.
+2. **Verify:** Run available static, smoke, regression and live checks as appropriate. Record what actually ran, which environment was used, failures and limitations. Do not describe a simulated check as a Windows/Windower/FFXI pass.
+3. **Update the status:** Place a concise **Current Development Status** at the very beginning of root `TESTING.md`, before its cumulative dated history. State the repository/branch, runtime and external companion version (if relevant), tested source baseline, most recent user-confirmed live behavior, current automated checks, unresolved problems/live tests, and the next development step. Update the README's short status pointer when needed.
+4. **Preserve history:** Add a dated testing entry for the delivery. Keep earlier observations intact; correct superseded publication or test claims with an explicit dated correction rather than silently rewriting them.
+5. **Publish and confirm:** Commit coherent code/test/documentation changes, push to the intended working branch, and verify the remote branch head. Report the actual published commit, the tests performed, and remaining live acceptance. A test package must match that identifiable source checkpoint.
+
+The tracked status cannot contain its own final commit hash: changing the file changes that hash. Identify the tested **starting/source checkpoint** in `TESTING.md`, then give the final published head SHA in the handoff and GitHub history. Do not confuse an older baseline or local-only commit with the remote branch head. Never promote unverified working branches to `main`/`master` merely to refresh status.
