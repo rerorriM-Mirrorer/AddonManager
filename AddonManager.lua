@@ -928,6 +928,7 @@ end
 
 cluster = require('am_cluster')({
     message = msg,
+    notice = notice,
     check = function(addon)
         if not valid_name(addon) or addon == 'addonmanager' or addon == 'addontoggle' or
             addon == 'plugin_manager' then
