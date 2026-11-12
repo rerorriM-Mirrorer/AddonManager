@@ -134,6 +134,18 @@ reload_list = {'Currently loaded addons:', '  Equipviewer', '  BarFiller', '  Ad
 events.load()
 assert(count_command('lua load barfiller') == bar_after_reconcile,
     'safe reload reloaded an already-running addon')
+local saw_checking, saw_audit, saw_noop = false, false, false
+for _, chat in ipairs(chats) do
+    if chat:find('[AM] Safe Reload - Checking Global + Myrr before loading...', 1, true) then
+        saw_checking = true
+    end
+    if chat:find('[AM] Audit Complete - Myrr:', 1, true) then saw_audit = true end
+    if chat:find('[AM] Safe Reload - All configured addons are running. Nothing to load.', 1, true) then
+        saw_noop = true
+    end
+end
+assert(saw_checking and saw_audit and saw_noop,
+    'safe reload did not use readable, capitalized addon-convention messages')
 reload_list = {'Currently loaded addons:', '  Equipviewer'}
 local before_incomplete = #commands
 events.load()
@@ -252,7 +264,7 @@ local stale_recovered = false
 local stale_inconclusive = false
 for i = before_stale + 1, #chats do
     if chats[i]:find('Recovered', 1, true) then stale_recovered = true end
-    if chats[i]:find('inconclusive', 1, true) then stale_inconclusive = true end
+    if chats[i]:lower():find('inconclusive', 1, true) then stale_inconclusive = true end
 end
 assert(stale_inconclusive and not stale_recovered, 'stale Logger list accepted as fresh')
 
@@ -263,7 +275,7 @@ am('audit')
 local recovered, audit_ok = false, false
 for i = before_logger + 1, #chats do
     if chats[i]:find('Recovered 5 addon names', 1, true) then recovered = true end
-    if chats[i]:find('Audit myrr:', 1, true) then audit_ok = true end
+    if chats[i]:find('Audit Complete - Myrr:', 1, true) then audit_ok = true end
 end
 assert(recovered and audit_ok, 'fresh Logger output did not recover audit')
 assert(#commands == before_logger_commands + 1 and commands[#commands] == 'lua list',
@@ -283,7 +295,7 @@ local before_empty = #chats
 am('audit')
 local empty_failed = false
 for i = before_empty + 1, #chats do
-    if chats[i]:find('inconclusive', 1, true) then empty_failed = true end
+    if chats[i]:lower():find('inconclusive', 1, true) then empty_failed = true end
 end
 assert(empty_failed, 'empty Logger snapshot incorrectly marked complete')
 logger_emulation = 'off'
@@ -356,6 +368,15 @@ am('delay', '0')
 am('delay', 'barfiller', '2')
 am('delay', 'enemybar2', '0.5')
 am('delay', 'list')
+am('status')
+local saw_status, saw_timing = false, false
+for _, chat in ipairs(chats) do
+    if chat:find('[AM] Status - v0.5.0-dev.10 | Cioara', 1, true) then
+        saw_status = true
+    end
+    if chat:find('[AM] Load Timing - ', 1, true) then saw_timing = true end
+end
+assert(saw_status and saw_timing, 'status/timing headers are not formatted')
 local options = contents('tmp_am/data/options.txt')
 assert(options:find('delay=0\n', 1, true) and
     options:find('delay_addon_barfiller=2\n', 1, true) and
