@@ -23,7 +23,7 @@ function M.begin(path, character)
     -- The file offset isolates a fresh request; the character identifies
     -- the client, and a short counter distinguishes repeated local audits.
     -- Keep internal log boundaries readable rather than dumping timestamps.
-    local who = character or 'Unknown'
+    local who = (character or 'Unknown'):gsub('^%l', string.upper)
     local check = tostring(serial)
     return {path = path .. 'console.log', offset = position,
         begin_marker = 'AddonManager | ' .. who .. ' | Checking loaded addons (#' .. check .. ')',
