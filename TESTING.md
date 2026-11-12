@@ -1,5 +1,41 @@
 # TESTING — AddonManager
 
+**Branch:** `dev/addonmanager-v0.5-message-polish`
+**Version:** 0.5.0-dev.10
+**Date:** 2026-11-12
+**Status:** Convention-styled addon feedback committed and automated-tested, **not yet evaluated visually inside FFXI**. Dev.8 has user-confirmed safe-reload success; dev.9 timing behavior remains unverified live.
+
+## Batch 5j — Readable, capitalized, colored chat feedback
+
+**User request:** After testing the newer AddonManager, user reported that reload/startup feedback looked unpolished, was unnecessarily lowercase/technical, and did not follow the consolidated `WORKFLOW.md` addon-message conventions. User requested attractive, properly capitalized messages across normal AddonManager operations.
+
+**Baseline and scope:** Branch `dev/addonmanager-v0.5-zero-default-delays`, v0.5.0-dev.9. Current `AGENTS.md`, `WORKFLOW.md`, and cumulative `TESTING.md` were reread from GitHub before changes. The existing zero-spacing scheduler, persistent per-addon timing, safe-reload audit-first gating, marker-bounded native console capture, same-PC IPC protocol, and settings data formats were kept unchanged.
+
+**Presentation changes:**
+- Unified routine feedback around `[AM]` and highlighted action headings via a `notice(title, detail, color)` helper. This uses the shared Windower color roles: prefix/headings **167**, separators **140**, normal descriptions **0**, warnings **123**. Help continues to use command prefix/arrow **200**, syntax **207**, and descriptions **0**.
+- Display-only name formatting capitalizes `Cioara`, `Myrr`, `Killala`, `Franklet`, and `Global` contexts while keeping internal lowercase IDs. The scheduler uses installed folder spelling when available (e.g. `GilFinder`).
+- Normal lifecycle output: `Restarting`, `Safe Reload`, `Audit Complete`, `Loading Addons`, and `Requests Sent`; complete and missing-only paths remain distinguishable. Requests Sent clearly states that actual initialization is **not verified**.
+- Updated visible messaging for profile edits/listing, imports, pruning, scan results, timing overrides, saved settings, manual audit, startup toggles, status, and same-PC all-client discovery/requests.
+- Native `console.log` audit markers now capitalize the character name while preserving exactly matched begin/end marker logic and existing readout sequence.
+- No additional automatic loads, reloads, retries, timers, or console commands were introduced by these message changes. Manager restart adds a single explanatory chat notice before the existing one-time reload command.
+
+**Automated verification:**
+- [x] Lua 5.1 syntax checking for the manager and helper modules.
+- [x] Existing safe-reload missing-only/no-op and fail-closed mock scenarios still pass; new assertions check `Safe Reload - Checking Global + Myrr`, `Audit Complete - Myrr`, and the clear no-work result.
+- [x] Mocked chat coloring invokes expected heading/separator/description roles **167**, **140**, and **0**.
+- [x] Saved timing, delayed loads, cancellation, post-load audits, console snapshot/marker sequencing and multiclient IPC regression checks remain green.
+- [ ] **Live FFXI:** Install over the working AddonManager *files only*, preserving all of `data/`, then `//am restart`. Verify the headings, spacing, readable capitalized character names and colors in the FFXI chatlog.
+- [ ] Run `//am audit` and `//am status`; confirm consistent hierarchy without flooding chat or unexpectedly reloading any addon.
+- [ ] Run `//am delay list` and review the capitalization of addon names, keeping existing saved settings.
+- [ ] Optionally test a deliberate missing-only reload and same-PC `//am all` operation in a safe area; verify behavior is identical to previous builds and messages never claim successful initialization before it is observed.
+- [ ] Review readability at both 4K and the smaller laptop resolution, and report any lines that feel redundant or too long.
+
+**Delivery:** New branch `dev/addonmanager-v0.5-message-polish`; previous dev.9 scheduling branch and live-verified dev.8 branch left untouched. Code, simulated test changes, README and this cumulative TESTING entry are committed/pushed. Final CI run and commit are listed at delivery. **In-game validation for dev.10 is pending.**
+
+---
+
+# PREVIOUS TESTING — AddonManager
+
 **Branch:** `dev/addonmanager-v0.5-zero-default-delays`
 **Version:** 0.5.0-dev.9
 **Date:** 2026-10-30
