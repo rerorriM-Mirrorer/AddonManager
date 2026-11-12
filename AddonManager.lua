@@ -992,21 +992,23 @@ local function dispatch(...)
     elseif verb == 'capture' then
         local choice = args[2] and args[2]:lower()
         if not choice then
-            msg('Loaded list output: ' .. capture_mode .. ' (//am capture console|chat)')
+            notice('Audit Source', display_character(capture_mode) ..
+                '. Use //am capture console or //am capture chat.')
         elseif choice ~= 'console' and choice ~= 'chat' then
             msg('Use //am capture console|chat.', 123)
         else
             capture_mode = choice
-            if save_options() then msg('List capture source: ' .. capture_mode) end
+            if save_options() then notice('Audit Source', display_character(capture_mode) .. ' selected.') end
         end
     elseif verb == 'verify' then
         if args[2] ~= 'on' and args[2] ~= 'off' then
-            msg('Startup verification: ' .. (verify_enabled and 'on' or 'off') ..
-                '. Usage: //am verify on|off')
+            notice('Startup Audit', (verify_enabled and 'On' or 'Off') ..
+                '. Use //am verify on or //am verify off.')
             return
         end
         verify_enabled = args[2] == 'on'
-        if save_options() then msg('Startup verification ' .. args[2]) end
+        if save_options() then notice('Startup Audit',
+            args[2] == 'on' and 'Enabled.' or 'Disabled.') end
     elseif verb == 'scan' then
         scan_installed((args[2] or ''):lower() == 'all')
     elseif verb == 'import' then
@@ -1018,10 +1020,11 @@ local function dispatch(...)
             local names = {}
             for addon in pairs(addon_delays) do names[#names + 1] = addon end
             table.sort(names)
-            msg(('Default load spacing: %gs | %d addon offset(s)'):format(
-                delay_seconds, #names))
+            notice('Load Timing', ('%gs spacing | %d custom offset%s.'):format(
+                delay_seconds, #names, #names == 1 and '' or 's'))
             for _, addon in ipairs(names) do
-                msg(('  %s: %gs after batch start'):format(addon, addon_delays[addon]), 0)
+                msg(('  %s: %gs after batch start'):format(
+                    display_addon(addon, (installed_lookup())), addon_delays[addon]), 0)
             end
             return
         end
@@ -1032,7 +1035,8 @@ local function dispatch(...)
                 return
             end
             delay_seconds = seconds
-            if save_options() then msg('Default load spacing: ' .. tostring(delay_seconds) .. 's') end
+            if save_options() then notice('Load Timing',
+                'Default spacing set to ' .. tostring(delay_seconds) .. 's.') end
             return
         end
         local addon, choice = normal(args[2]), args[3]:lower()
@@ -1043,7 +1047,8 @@ local function dispatch(...)
         end
         if choice == 'off' then
             addon_delays[addon] = nil
-            if save_options() then msg('Removed load offset for ' .. addon) end
+            if save_options() then notice('Load Timing',
+                'Custom offset removed for ' .. display_addon(addon, (installed_lookup())) .. '.') end
             return
         end
         local seconds = tonumber(choice)
@@ -1052,39 +1057,37 @@ local function dispatch(...)
             return
         end
         addon_delays[addon] = seconds
-        if save_options() then msg(('Load offset for %s: %gs after batch start'):format(
-            addon, seconds)) end
+        if save_options() then notice('Load Timing',
+            ('%s will be requested %gs after batch start.'):format(
+                display_addon(addon, (installed_lookup())), seconds)) end
     elseif verb == 'startup' then
         if args[2] ~= 'on' and args[2] ~= 'off' then
-            msg('Startup is ' .. (startup_enabled and 'on' or 'off') ..
-                '. Usage: //am startup on|off'); return
+            notice('Automatic Loading', (startup_enabled and 'On' or 'Off') ..
+                '. Use //am startup on or //am startup off.'); return
         end
         startup_enabled = args[2] == 'on'
-        if save_options() then msg('Automatic profile loading: ' .. args[2]) end
+        if save_options() then notice('Automatic Loading',
+            args[2] == 'on' and 'Enabled.' or 'Disabled.') end
     elseif verb == 'status' then
-        local who = current_profile() or '(character not logged in)'
-        msg('v' .. _addon.version .. ' | character: ' .. who ..
-            ' | startup: ' .. (startup_enabled and 'on' or 'off') ..
-            ' | spacing: ' .. tostring(delay_seconds) .. 's' ..
-            ' | custom offsets: ' .. tostring((function()
-                local n = 0
-                for _ in pairs(addon_delays) do n = n + 1 end
-                return n
-            end)()) ..
-            ' | verify: ' .. (verify_enabled and 'on' or 'off') ..
-            ' | capture: ' .. capture_mode) 
+        local who = current_profile()
+        local custom = 0
+        for _ in pairs(addon_delays) do custom = custom + 1 end
+        notice('Status', ('v%s | %s | Startup: %s | Audit: %s'):format(
+            _addon.version, who and display_character(who) or 'Not Logged In',
+            startup_enabled and 'On' or 'Off', verify_enabled and 'On' or 'Off'))
+        notice('Load Timing', ('%gs spacing | %d custom offset%s | Capture: %s'):format(
+            delay_seconds, custom, custom == 1 and '' or 's',
+            display_character(capture_mode)))
         cluster.status()
-        msg('Global: ' .. #read_profile('global') .. ' | character: ' ..
-            (who ~= '(character not logged in)' and
-                #read_profile(who) or 0) ..
-            ' | command requests tracked: ' .. tostring((function()
-                local count = 0
-                for _ in pairs(requested) do count = count + 1 end
-                return count
-            end)()) .. ' (unverified)')
+        local requested_count = 0
+        for _ in pairs(requested) do requested_count = requested_count + 1 end
+        notice('Saved Profiles', ('Global: %d | %s: %d | Requests tracked: %d (unverified)'):format(
+            #read_profile('global'), who and display_character(who) or 'Character',
+            who and #read_profile(who) or 0, requested_count))
     elseif verb == 'restart' then
         generation = generation + 1
         cluster.cancel('manager restart')
+        notice('Restarting', 'Reloading AddonManager. Running addons stay loaded.')
         windower.send_command('lua reload AddonManager')
     else
         msg('Unknown command: ' .. verb, 123)
