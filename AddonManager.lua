@@ -197,10 +197,10 @@ end
 local function display_list(profile)
     if not profile then msg('No character detected. Specify a profile.', 123); return end
     local list = read_profile(profile)
-    msg(profile .. ': ' .. #list .. ' saved addon(s)')
-    if #list == 0 then msg('  (empty)', 0) end
+    notice('Saved Profile', display_scope(profile) .. ': ' .. #list .. ' addons.')
+    if #list == 0 then msg('  No addons saved.', 0) end
     for i, addon in ipairs(list) do
-        msg(('  %02d. %s'):format(i, addon), 0)
+        msg(('  %02d. %s'):format(i, display_addon(addon)), 0)
     end
 end
 
@@ -221,10 +221,12 @@ local function edit_profile(verb, profile, addon)
     local list = read_profile(profile)
     local exists = has_value(list, addon)
     if verb == 'add' then
-        if exists then msg(addon .. ' already in ' .. profile); return end
+        if exists then notice('Profile', display_addon(addon) ..
+            ' is already in ' .. display_scope(profile) .. '.'); return end
         list[#list + 1] = addon
     else
-        if not exists then msg(addon .. ' is not in ' .. profile); return end
+        if not exists then notice('Profile', display_addon(addon) ..
+            ' is not in ' .. display_scope(profile) .. '.'); return end
         local new = {}
         for _, entry in ipairs(list) do
             if entry ~= addon then new[#new + 1] = entry end
@@ -232,9 +234,9 @@ local function edit_profile(verb, profile, addon)
         list = new
     end
     if write_profile(profile, list) then
-        msg((verb == 'add' and 'Added ' or 'Removed ') .. addon ..
-            (verb == 'add' and ' to ' or ' from ') .. profile ..
-            ' (saved; running addons unchanged)')
+        notice('Profile Saved', (verb == 'add' and 'Added ' or 'Removed ') ..
+            display_addon(addon) .. (verb == 'add' and ' to ' or ' from ') ..
+            display_scope(profile) .. '. Running addons unchanged.')
     end
 end
 
@@ -374,14 +376,15 @@ local function scan_installed(show_all)
     table.sort(names, function(a, b) return a:lower() < b:lower() end)
     local managed = combine(read_profile('global'),
         read_profile(current_profile() or 'global'))
-    msg(('Found %d installed Lua addon(s); profiles are not changed'):format(#names))
+    notice('Installed Addons', ('Found %d addons. Saved profiles unchanged.'):format(#names))
     local limit = show_all and #names or math.min(#names, 18)
     for i = 1, limit do
         local name = names[i]
         msg(('  %s%s'):format(name,
             has_value(managed, name:lower()) and ' [listed]' or ''), 0)
     end
-    if limit < #names then msg('Use //am scan all for the complete catalog') end
+    if limit < #names then notice('Installed Addons',
+        'Use //am scan all for the complete list.') end
 end
 
 local function parse_init(s)
@@ -616,13 +619,15 @@ local function finish_loaded_capture(capture)
         end
     end
     pending_import = {source = 'loaded', target = capture.target, names = additions}
-    msg(('Live snapshot: %d displayed -> %s: %d new, %d shared, %d saved, %d protected, %d unresolved'):format(
-        #capture.lines, capture.target, #additions, in_global, already_saved, protected, #unresolved))
+    notice('Import Preview', ('%s: %d observed | %d new | %d shared | %d saved | %d protected | %d unresolved'):format(
+        display_scope(capture.target), #capture.lines, #additions, in_global,
+        already_saved, protected, #unresolved))
     for _, addon in ipairs(additions) do msg('  + ' .. addon, 0) end
     for _, display in ipairs(unresolved) do
         msg('  ? Unmatched display name: ' .. display, 123)
     end
-    msg('Snapshot from this client only. No changes yet. //am import confirm|cancel')
+    notice('Import Preview',
+        'Current client only. No changes yet. Use //am import confirm or cancel.')
 end
 
 -- Audit/import queries share a single capture pipeline. Console mode never
@@ -798,10 +803,11 @@ local function preview_import(source, target)
         end
     end
     pending_import = {source = source, target = target, names = additions}
-    msg(('Preview %s -> %s: %d new; %d unavailable skipped'):format(
-        source, target, #additions, missing))
+    notice('Import Preview', ('%s to %s: %d new | %d unavailable skipped.'):format(
+        display_character(source), display_scope(target), #additions, missing))
     for _, name in ipairs(additions) do msg('  + ' .. name, 0) end
-    msg('No changes yet. //am import confirm or //am import cancel.')
+    notice('Import Preview',
+        'Nothing saved yet. Use //am import confirm or //am import cancel.')
 end
 
 local function import_command(source, target)
@@ -818,7 +824,8 @@ local function import_command(source, target)
         end
         local combined = combine(read_profile(p.target), safe)
         if write_profile(p.target, combined) then
-            msg(('Imported %d entry/entries into %s; saved.'):format(#safe, p.target))
+            notice('Import Saved', ('%d addons added to %s.'):format(
+                #safe, display_scope(p.target)))
             pending_import = nil
         end
         return
@@ -848,7 +855,8 @@ local function prune_command(arg)
         end
         if write_profile(p.target, kept) then
             pending_prune = nil
-            msg(('Pruned %d redundant entries from %s; nothing unloaded.'):format(removed, p.target))
+            notice('Profile Pruned', ('Removed %d duplicate entries from %s. Nothing unloaded.'):format(
+                removed, display_scope(p.target)))
         end
         return
     end
@@ -864,8 +872,8 @@ local function prune_command(arg)
         if has_value(global, addon) then duplicates[#duplicates + 1] = addon end
     end
     pending_prune = {target = target, duplicates = duplicates}
-    msg(('Prune preview for %s: %d entries already in global. No changes yet.'):format(
-        target, #duplicates))
+    notice('Prune Preview', ('%s: %d entries already in Global. No changes yet.'):format(
+        display_scope(target), #duplicates))
     for _, addon in ipairs(duplicates) do msg('  - ' .. addon, 0) end
     msg('Use //am prune confirm or //am prune cancel.')
 end
