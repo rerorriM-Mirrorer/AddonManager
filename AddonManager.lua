@@ -242,7 +242,8 @@ local function command_items(kind, list, label, start_after, after)
     generation = generation + 1
     local token = generation
     if #list == 0 then
-        msg(label .. ': no addons to ' .. kind)
+        notice(kind == 'load' and 'Loading Addons' or 'Unloading Addons',
+            display_scope(label) .. ': Nothing to ' .. kind .. '.')
         if after then after() end
         return
     end
@@ -259,8 +260,18 @@ local function command_items(kind, list, label, start_after, after)
             end
         end
     end
-    msg(('%s: queued %d %s request(s), %gs spacing, %d special offset(s)'):format(
-        label, #list, kind, delay_seconds, special_count))
+    local scope = display_scope(label)
+    local noun = #list == 1 and 'addon' or 'addons'
+    local timing = delay_seconds == 0 and 'no spacing' or
+        ('%gs spacing'):format(delay_seconds)
+    local details = ('%s: %d %s queued, %s'):format(
+        scope, #list, noun, timing)
+    if kind == 'load' and special_count > 0 then
+        details = details .. (', %d timed offset%s'):format(
+            special_count, special_count == 1 and '' or 's')
+    end
+    notice(kind == 'load' and 'Loading Addons' or 'Unloading Addons',
+        details .. '.')
     -- Scan only once per batch to avoid expensive repeated directory reads.
     local installed, scanned = installed_lookup()
     coroutine.schedule(function()
@@ -271,13 +282,14 @@ local function command_items(kind, list, label, start_after, after)
             if wait > 0 then coroutine.sleep(wait) end
             previous_at = item.at
             if generation ~= token then
-                msg(label .. ': previous queue canceled')
+                notice('Queue Canceled', scope .. ': Pending requests were not sent.', 123)
                 return
             end
             local addon = item.addon
             if kind == 'load' then
                 if scanned and not installed[addon] then
-                    msg('Skipping missing addon: ' .. addon, 123)
+                    notice('Addon Not Found', display_addon(addon, installed) ..
+                        ': Load request skipped.', 123)
                 else
                     windower.send_command('lua load ' .. addon)
                     requested[addon] = 'load requested'
@@ -287,11 +299,13 @@ local function command_items(kind, list, label, start_after, after)
                     windower.send_command('lua unload ' .. addon)
                     requested[addon] = 'unload requested'
                 else
-                    msg('Protected addon not unloaded: ' .. addon, 123)
+                    notice('Protected Addon', display_addon(addon, installed) ..
+                        ': Unload request skipped.', 123)
                 end
             end
         end
-        msg(label .. ': requests dispatched (completion not verified)')
+        notice('Requests Sent', ('%s: %d %s requested. Initialization not verified.'):format(
+            scope, #list, noun))
         if after then after() end
     end, 0)
 end
@@ -315,7 +329,7 @@ local function apply_current(start_after, check_on_startup)
 end
 
 local function print_help()
-    msg('AddonManager / Profile Manager v' .. _addon.version, 167)
+    notice('AddonManager', 'Profile Manager v' .. _addon.version)
     local lines = {
         {'//am list [global|character]', 'Show saved profile'},
         {'//am add [global|character] <addon>', 'Save an entry; do not load'},
