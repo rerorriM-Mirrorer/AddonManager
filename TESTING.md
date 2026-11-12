@@ -3,7 +3,23 @@
 **Branch:** `dev/addonmanager-v0.5-message-polish`
 **Version:** 0.5.0-dev.10
 **Date:** 2026-11-12
-**Status:** Convention-styled addon feedback committed and automated-tested, **not yet evaluated visually inside FFXI**. Dev.8 has user-confirmed safe-reload success; dev.9 timing behavior remains unverified live.
+**Status:** Consolidated authorship metadata to `A` with no operational changes (static review only). Dev.10 message styling and dev.9 timing remain pending live validation; dev.8 safe reload was user-confirmed.
+
+## Batch 5k — Single collaborative author credit
+
+**Request (2026-11-12):** The addon displayed two names for the same shared authoring identity. Use the single author name `A` everywhere in current metadata and documentation.
+
+**Changes:** Set the Lua header comment and `_addon.author` to `A`, change the README's author field to `A`, and reword the original toggle changelog entry without changing the historical behavior it records. Retain the addon version `0.5.0-dev.10` and all existing functionality, settings, profiles, and tests.
+
+**Verification:**
+- [x] Compared source changes: only the header comment and author metadata changed in executable Lua.
+- [x] Reviewed current README author and historical entry for consistency.
+- [x] Confirmed the existing TESTING history was kept and this batch was added without deleting earlier results.
+- [ ] **Live FFXI:** After installing updated AddonManager.lua, run `//am restart` and check that Windower's `lua list` displays `AddonManager (author: A, version: 0.5.0-dev.10)`. No in-game validation has been performed for this authorship-only correction.
+
+**Delivery:** One metadata/documentation commit on `dev/addonmanager-v0.5-message-polish`; no merge into the known-good main branch. No additional code behavior changed.
+
+---
 
 ## Batch 5j — Readable, capitalized, colored chat feedback
 

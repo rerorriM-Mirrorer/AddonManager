@@ -1,6 +1,6 @@
 # AddonManager
 
-**Author:** Max and A
+**Author:** A
 **Development version:** 0.5.0-dev.10
 **Windower:** FFXI / Windower 4 (Lua 5.1)
 **Commands:** //am
@@ -166,7 +166,7 @@ Run //am import file Cioara to read plain addon names (one per line, optional # 
 
 ## Changelog
 
-- **Original v1.0:** Max's //at toggle for BarFiller and EquipViewer.
+- **Original v1.0:** The //at toggle for BarFiller and EquipViewer.
 - **2026-10-14 / 0.2.0-dev.1 / Batch 1:** Saved profiles; global and character login loading; stagger interval; list editing; explicit load/unload; preserved //at alias.
 - **2026-10-14 / Batch 2 experimental:** Addon directory scan; safe preview/confirmation imports from init.txt, legacy XML, and plain text.
 - **2026-10-14 / Batch 3 experimental (v0.3):** Capture Windower's loaded-addon list through incoming-text events; reconcile spaced display names against installed addon folders and preview safe merge-only profile import. **Live capture subsequently confirmed by user.**
@@ -182,6 +182,7 @@ Run //am import file Cioara to read plain addon names (one per line, optional # 
 - **2026-10-22 / Batch 5h (v0.5.0-dev.8):** Fix nondeterministic Windower ordering of the begin/list/end console commands by advancing only after actual file-log observation. Live Killala and Franklet successes in dev.7 retained; dev.8 staging awaits live verification.
 - **2026-10-30 / Batch 5i (v0.5.0-dev.9):** New installs load with zero gap by default; saved per-addon start offsets delay only selected addons. Preserve old saved spacing, safe-reload audit-first behavior, cancellations, and independent cross-client staggering. Lua 5.1 simulated tests, live test pending.
 - **2026-11-12 / Batch 5j (v0.5.0-dev.10):** Polish in-game messages using WORKFLOW.md colors, human-readable headings and proper name capitalization. Safe reload, audits, loads, profiles, IPC messages and status are presentation-only changes; core addon actions unchanged. Mocked checks passed; live appearance unverified.
+- **2026-11-12 / Batch 5k (v0.5.0-dev.10):** Consolidate the shared author credit to `A` in addon metadata, source header, and README; preserve the original toggle's history without a separate name credit. No operational changes.
 
 ## Attribution
 

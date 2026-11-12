@@ -1,9 +1,9 @@
 -- AddonManager / Profile Manager
--- Author: Max and A
+-- Author: A
 -- Character profiles and discovery are independent of Windower's original plugin_manager.
 -- No code copied from the original plugin_manager; see README for historical inspiration.
 _addon.name = 'AddonManager'
-_addon.author = 'Max and A'
+_addon.author = 'A'
 _addon.version = '0.5.0-dev.10'
 _addon.commands = {'am'}
 
