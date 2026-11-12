@@ -517,19 +517,24 @@ local function finish_audit(capture)
     -- No guesses if the heading/rows were cut off or an entry cannot be mapped.
     local actionable = observed.addonmanager == true and #unresolved == 0
     if capture.source == 'reload' and not actionable then
-        msg('Safe reload: incomplete lua-list snapshot (manager missing or names unresolved).', 123)
+        notice('Safe Reload', 'Audit incomplete: AddonManager missing or names unresolved. No addons loaded.', 123)
         return false
     end
-    local head = ('Audit %s: %d/%d expected loaded; %d missing; %d unmanaged; %d unresolved'):format(
-        capture.character, matched, #expected, #missing, #unlisted, #unresolved)
+    local head = ('%s: %d/%d configured running | %d missing | %d unmanaged | %d unresolved'):format(
+        display_character(capture.character), matched, #expected,
+        #missing, #unlisted, #unresolved)
     -- Windower-native addons managed outside profiles count as unmanaged, not errors.
-    msg(head, #missing > 0 and 123 or 207)
-    for _, addon in ipairs(missing) do msg('  Missing: ' .. addon, 123) end
+    notice('Audit Complete', head, #missing > 0 and 123 or 0)
+    for _, addon in ipairs(missing) do
+        msg('  Missing: ' .. display_addon(addon, installed), 123)
+    end
     if #unresolved > 0 then
         msg('  ' .. #unresolved .. ' display name(s) could not be matched; results may be incomplete.', 123)
     end
     if capture.source == 'manual' then
-        for _, addon in ipairs(unlisted) do msg('  Unmanaged: ' .. addon, 0) end
+        for _, addon in ipairs(unlisted) do
+            msg('  Unmanaged: ' .. display_addon(addon, installed), 0)
+        end
     end
     -- A snapshot can reveal missing addons but never proves a load command succeeded.
     return actionable, missing
@@ -568,10 +573,10 @@ local function finish_loaded_capture(capture)
                 '; Logger: ' .. (logger_reason or 'not available')
         end
         if capture.kind == 'audit' then
-            msg('Audit inconclusive (' .. detail .. '). No changes made.', 123)
+            notice('Audit Inconclusive', detail .. '. No changes made.', 123)
             if capture.done then capture.done(false) end
         else
-            msg('Loaded import inconclusive (' .. detail .. '). No import prepared.', 123)
+            notice('Import Inconclusive', detail .. '. No import prepared.', 123)
         end
         return
     end
@@ -628,8 +633,8 @@ local function issue_loaded_list(capture)
     if capture.mode == 'console' then
         local snapshot, err = console_capture.begin(windower.windower_path, current_profile())
         if not snapshot then
-            msg('Quiet audit unavailable: ' .. tostring(err) ..
-                '. No load requests issued.', 123)
+            notice('Audit Unavailable', tostring(err) ..
+                '. No load requests sent.', 123)
             if capture.done then capture.done(false) end
             return false
         end
@@ -685,7 +690,7 @@ local function begin_loaded_capture(target)
     if running_capture then msg('A lua-list capture is in progress. Try again shortly.', 123); return end
     pending_import = nil
     pending_prune = nil
-    msg('Requesting current-client addon list (' .. capture_mode .. ')...')
+    notice('Addon Snapshot', 'Reading the current client via ' .. capture_mode .. '...')
     issue_loaded_list({target = target, started = false, finished = false, lines = {}})
 end
 
@@ -702,7 +707,8 @@ begin_audit = function(source, done)
         return false
     end
     if source == 'manual' then
-        msg('Auditing global + ' .. who .. ' using ' .. capture_mode .. ' output.')
+        notice('Audit', 'Checking Global + ' .. display_character(who) ..
+            ' via ' .. capture_mode .. '...')
     end
     return issue_loaded_list({kind = 'audit', source = source, character = who,
         started = false, finished = false, lines = {}, done = done})
@@ -719,20 +725,22 @@ local function reconcile_on_reload()
         -- Let LuaCore finish addon load and Logger establish its log file.
         coroutine.sleep(0.5)
         if generation ~= token or current_profile() ~= who then return end
-        msg('Safe reload: auditing global + ' .. who .. ' before any load requests.')
+        notice('Safe Reload', 'Checking Global + ' .. display_character(who) ..
+            ' before loading...')
         begin_audit('reload', function(ok, missing)
             if generation ~= token or current_profile() ~= who then return end
             if not ok then
-                msg('Safe reload: no addons loaded because verification was inconclusive. '
-                    .. 'Use //am audit or //am apply to load manually.', 123)
+                notice('Safe Reload', 'Audit inconclusive. No addons loaded. ' ..
+                    'Use //am audit to retry or //am apply to load manually.', 123)
                 return
             end
             if #missing == 0 then
-                msg('Safe reload: all configured addons already running. Nothing to load.')
+                notice('Safe Reload', 'All configured addons are running. Nothing to load.')
                 return
             end
             local list = missing
-            msg(('Safe reload: %d addon(s) missing; only those will be requested.'):format(#list))
+            notice('Safe Reload', ('%d missing %s. Loading only the missing addons.'):format(
+                #list, #list == 1 and 'addon' or 'addons'))
             local after
             if verify_enabled then
                 after = function()
