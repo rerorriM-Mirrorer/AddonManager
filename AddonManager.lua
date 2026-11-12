@@ -29,8 +29,8 @@ local requested = {} -- This is intent, NOT a confirmed list of loaded addons.
 local begin_audit -- Assigned below; startup queue callback uses it after source initialization.
 local cluster
 
--- Windower chat conventions: addon prefix/headings 167, separators 140,
--- syntax 207, neutral descriptions 0, and warnings 123.
+-- Windower chat conventions: prefix/headings 167, separators 140,
+-- syntax 207, descriptions 0, warning text 123.
 local function msg(s, color)
     windower.add_to_chat(0, ('[AM] '):color(167) .. tostring(s):color(color or 0))
 end
@@ -41,7 +41,7 @@ local function notice(title, detail, color)
         tostring(detail):color(color or 0))
 end
 
--- Profile keys remain lowercase for persistence; only displayed names change.
+-- Profile keys remain lowercase for persistence; display capitalization only.
 local function display_character(value)
     return (tostring(value or ''):gsub('^%l', string.upper))
 end
