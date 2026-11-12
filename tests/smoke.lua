@@ -1,6 +1,7 @@
 -- Mock-Windower smoke tests for Lua 5.1; no FFXI installation needed.
 _addon = {}
 local events, commands, chats = {}, {}, {}
+local chat_colors = {}
 local who = 'Myrr'
 local simulate_list = true
 local reload_list = nil -- Override simulated lua list for safe-reload tests
@@ -8,7 +9,10 @@ local logger_emulation = 'off' -- Simulated Logger disk output, distinct from in
 local console_emulation = false -- Simulate native console.log independently of chat
 
 package.preload['chat'] = function()
-    string.color = function(self) return self end
+    string.color = function(self, color)
+        chat_colors[color] = true
+        return self
+    end
     string.strip_colors = function(self) return self end
     return {}
 end
@@ -146,6 +150,8 @@ for _, chat in ipairs(chats) do
 end
 assert(saw_checking and saw_audit and saw_noop,
     'safe reload did not use readable, capitalized addon-convention messages')
+assert(chat_colors[167] and chat_colors[140] and chat_colors[0],
+    'chat headings/separators/descriptions missed WORKFLOW.md color conventions')
 reload_list = {'Currently loaded addons:', '  Equipviewer'}
 local before_incomplete = #commands
 events.load()
