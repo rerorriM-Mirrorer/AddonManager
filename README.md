@@ -1,7 +1,7 @@
 # AddonManager
 
 **Author:** Max and A
-**Development version:** 0.5.0-dev.9
+**Development version:** 0.5.0-dev.10
 **Windower:** FFXI / Windower 4 (Lua 5.1)
 **Commands:** //am
 
@@ -14,7 +14,7 @@ Manage **Lua addons** with persistent global and per-character lists. Inspired b
 3. Disable the original AddonToggle and Windower plugin_manager in startup configuration; do not run two profile managers simultaneously. Keep the old AddonToggle folder as an offline backup.
 4. Load from the console with `lua load AddonManager` or enable the new folder through the Windower launcher. Type `//am help`.
 5. Replace references to old `//pm` and `//at` commands in macros and scripts; **neither alias is registered**. The BarFiller/EquipViewer pair-toggle has been retired.
-6. **v0.5.0-dev.9 is a development build.** Its new timing scheduler is simulated-tested but has not been tried in FFXI. The dev.8 safe-reload design is live-confirmed; preserve the working install and its data directory.
+6. **v0.5.0-dev.10 is a message-presentation testing build.** The dev.9 timing scheduler and previously verified safe-reload behavior are unchanged. New chat formatting is automated-tested, but has not been checked in live FFXI. Keep the current working install and saved data for rollback.
 
 AddonManager itself should be started through Windower, so that it receives actual character login events. Other addon startup arrangements may remain independent.
 
@@ -59,6 +59,25 @@ Example: //am add global ConsoleBGPlus and //am add Cioara EnemyBar2. Then //am 
 
 Every add/remove immediately saves a plain text file, e.g. data/profiles/global.txt or data/profiles/cioara.txt. Editing is independent of loading. Duplicate entries are suppressed. Saved startup options are kept in data/options.txt.
 
+
+## Chat message styling (v0.5.0-dev.10)
+
+Routine AddonManager feedback now follows the shared `WORKFLOW.md` addon conventions: `[AM]` prefix and action headings in color **167**, separators in **140**, neutral descriptions in **0**, command syntax in help **207**, command prefixes/arrows in **200**, and warnings in **123**. Messages appear in the **FFXI chatlog**, not duplicated into the console.
+
+The names shown to players are capitalized (for example `Global + Franklet`, `Audit Complete - Killala`, and addon names matching installed folder spelling when possible). Underlying profile IDs, file paths, IPC routing, and Lua load commands **remain lowercase/unchanged**. The native console's short audit markers also display the character's name with the appropriate initial capital.
+
+Typical reload output, rendered here without the game's colors:
+
+```text
+[AM] Restarting - Reloading AddonManager. Running addons stay loaded.
+[AM] Safe Reload - Checking Global + Franklet before loading...
+[AM] Audit Complete - Franklet: 22/22 configured running | 0 missing | 27 unmanaged | 0 unresolved
+[AM] Safe Reload - All configured addons are running. Nothing to load.
+```
+
+With missing addons, the reload still audits first, requests **only** the missing addons, and reports "Requests Sent" rather than claiming initialization finished. Delay settings, status, profile/import feedback, and same-computer all-client messages also use consistent headings and capitalized display names. Warnings remain visually distinct. Text formatting is the only intended change in this batch.
+
+**Verification:** Lua 5.1 and mocked Windower regression tests; actual color rendering and perceived appearance still need in-game feedback.
 
 ## Profile timing (v0.5.0-dev.9)
 
@@ -162,6 +181,7 @@ Run //am import file Cioara to read plain addon names (one per line, optional # 
 - **2026-10-22 / Batch 5g (v0.5.0-dev.7):** Short human-readable console audit start/end messages tagged by character and session check number; source format compared against user-supplied real console.log; parsing safety and previous tests preserved.
 - **2026-10-22 / Batch 5h (v0.5.0-dev.8):** Fix nondeterministic Windower ordering of the begin/list/end console commands by advancing only after actual file-log observation. Live Killala and Franklet successes in dev.7 retained; dev.8 staging awaits live verification.
 - **2026-10-30 / Batch 5i (v0.5.0-dev.9):** New installs load with zero gap by default; saved per-addon start offsets delay only selected addons. Preserve old saved spacing, safe-reload audit-first behavior, cancellations, and independent cross-client staggering. Lua 5.1 simulated tests, live test pending.
+- **2026-11-12 / Batch 5j (v0.5.0-dev.10):** Polish in-game messages using WORKFLOW.md colors, human-readable headings and proper name capitalization. Safe reload, audits, loads, profiles, IPC messages and status are presentation-only changes; core addon actions unchanged. Mocked checks passed; live appearance unverified.
 
 ## Attribution
 
