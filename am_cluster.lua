@@ -5,6 +5,13 @@ return function(api)
     local prefix, active, serial, gap = 'AMALL1', nil, 0, 2
     local seen = {}
     local dispatch
+    local function present(value)
+        return (tostring(value or ''):gsub('^%l', string.upper))
+    end
+    local function say(title, detail, color)
+        if api.notice then api.notice(title, detail, color)
+        else api.message(title .. ' - ' .. detail, color) end
+    end
 
     local function name()
         local info = windower.ffxi.get_info and windower.ffxi.get_info()
@@ -41,17 +48,19 @@ return function(api)
         active = nil
         if s.leader == s.me then send('*', 'cancel', s.token)
         else send(s.leader, 'abort', s.token) end
-        api.message('All-client batch stopped: ' .. reason, 123)
+        say('All-Client Batch', 'Stopped: ' .. present(reason) .. '.', 123)
     end
 
     local function complete(s, who)
         if active ~= s or s.phase ~= 'waiting' or s.current ~= who then return end
         s.phase = 'gap'
-        api.message(who .. ': ' .. s.verb .. ' ' .. s.addon .. ' dispatched (unverified).')
+        say('All-Client Request', present(who) .. ': ' .. present(s.verb) .. ' ' ..
+            present(s.addon) .. ' requested (unverified).')
         if s.index == #s.order then
             send('*', 'finish', s.token)
             active = nil
-            api.message('All-client requests dispatched to ' .. #s.order .. ' client(s).')
+            say('All-Client Requests', ('Sent to %d clients. Initialization not verified.'):format(
+                #s.order))
         else
             later(s, s.gap, function() dispatch(s) end)
         end
@@ -94,14 +103,17 @@ return function(api)
         active = s
         mark_seen(token)
         send('*', 'probe', token, verb .. ':' .. addon)
-        api.message('Discovering AddonManager clients; ' .. me .. ' will run last.')
+        say('All-Client Discovery', 'Finding AddonManager clients; ' ..
+            present(me) .. ' will run last.')
         later(s, 0.5, function()
             s.order = {}
             for who in pairs(s.members) do s.order[#s.order + 1] = who end
             table.sort(s.order)
             s.order[#s.order + 1] = me
-            api.message('Order: ' .. table.concat(s.order, ' -> ') ..
-                ' (' .. s.gap .. 's between dispatches).')
+            local names = {}
+            for _, member in ipairs(s.order) do names[#names + 1] = present(member) end
+            say('All-Client Order', table.concat(names, ' -> ') ..
+                ' (' .. s.gap .. 's between requests).')
             dispatch(s)
         end)
         later(s, 90, function() cancel('batch expired') end)
@@ -155,7 +167,9 @@ return function(api)
         elseif from == s.leader then
             if verb == 'cancel' or verb == 'finish' then
                 active = nil
-                if verb == 'cancel' then api.message('All-client batch cancelled by ' .. from) end
+                if verb == 'cancel' then
+                    say('All-Client Batch', 'Canceled by ' .. present(from) .. '.')
+                end
             elseif verb == 'run' and s.phase == 'ready' and value == s.addon then
                 -- Mark before dispatch: duplicate IPC can never issue the same command twice.
                 s.phase = 'running'
@@ -176,19 +190,21 @@ return function(api)
     return {
         cancel = cancel,
         status = function()
-            api.message('All clients: ' .. (active and
-                (active.phase .. ' for ' .. active.verb .. ' ' .. active.addon) or 'idle') ..
-                ' | stagger ' .. gap .. 's.')
+            say('All Clients', (active and
+                (present(active.phase) .. ': ' .. present(active.verb) .. ' ' ..
+                    present(active.addon)) or 'Idle') ..
+                ' | Stagger: ' .. gap .. 's.')
         end,
         gap = function(value)
-            if not value then api.message('Cross-client stagger: ' .. gap .. 's.'); return gap end
+            if not value then say('Cross-Client Timing', 'Stagger: ' .. gap .. 's.'); return gap end
             local n = tonumber(value)
             if not n or n ~= n or n < 0.1 or n > 10 then
                 api.message('Use //am stagger <0.1..10> seconds.', 123)
                 return
             end
             gap = n
-            api.message('Cross-client stagger set to ' .. gap .. 's (per initiating client).')
+            say('Cross-Client Timing', 'Stagger set to ' .. gap ..
+                's (per initiating client).')
             return n
         end,
         handle = function(verb, addon, extra)
